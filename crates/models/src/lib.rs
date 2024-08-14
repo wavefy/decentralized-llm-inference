@@ -1,14 +1,12 @@
 use candle_core::utils::{cuda_is_available, metal_is_available};
-use candle_core::{Device, Result, Tensor};
+use candle_core::{Device, Result};
 
-mod hf_hub_utils;
 mod layers_cache;
 mod logits_processor;
 pub mod phi3;
 mod quantized_var_builder;
 mod token_output_stream;
 mod utils;
-mod with_tracing;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct Session(u64);
