@@ -3,9 +3,9 @@ use models::{
     get_device,
     phi3::{model_path, Phi3LayersWorker, Phi3Model},
     remote::{RpcRequest, RpcResponse},
-    ModelLayersRanger, ModelLayersWorker,
+    ModelLayersWorker,
 };
-use protocol::Session;
+use protocol::{ModelLayersRanger, Session};
 use tokio::time::Instant;
 
 #[tokio::main]

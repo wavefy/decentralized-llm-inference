@@ -1,6 +1,15 @@
 [workspace]
 resolver = "2"
-members = [ "bin/desktop-app", "bin/layer-worker", "bin/openapi-server", "bin/registry-server","crates/models", "crates/protocol"]
+members = [
+    "bin/desktop-app",
+    "bin/openapi-server",
+    "bin/registry-server",
+    "crates/models",
+    "crates/network",
+    "crates/protocol",
+    "crates/registry",
+    "crates/worker"
+]
 
 [workspace.dependencies]
 serde = "1"

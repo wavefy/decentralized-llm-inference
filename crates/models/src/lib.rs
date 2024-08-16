@@ -1,6 +1,6 @@
 use candle_core::utils::{cuda_is_available, metal_is_available};
 use candle_core::{Device, Result};
-use protocol::Session;
+use protocol::{ModelLayersRanger, Session};
 
 mod layers_cache;
 mod logits_processor;
@@ -9,21 +9,6 @@ mod quantized_var_builder;
 pub mod remote;
 mod token_output_stream;
 mod utils;
-
-#[derive(Debug, Clone, Copy)]
-pub struct ModelLayersRanger {
-    pub from: u32,
-    pub to: u32,
-}
-
-impl ModelLayersRanger {
-    pub fn new(from: u32, to: u32) -> Self {
-        Self { from, to }
-    }
-    pub fn len(&self) -> usize {
-        (self.to - self.from + 1) as usize
-    }
-}
 
 #[allow(async_fn_in_trait)]
 pub trait ModelPreprocessor<IN, OUT> {

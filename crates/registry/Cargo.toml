@@ -1,0 +1,12 @@
+[package]
+name = "registry"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+network = { path = "../network", version = "0.1.0", default-features = false }
+protocol = { path = "../protocol", version = "0.1.0" }
+
+[features]
+client = []
+server = []
