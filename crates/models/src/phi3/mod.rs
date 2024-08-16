@@ -6,16 +6,16 @@ use candle_core::{
 };
 use candle_nn::RmsNorm;
 use hf_hub::{api::tokio::Api, Repo, RepoType};
-use layers_worker::Phi3LayersWorker;
-use postprocessing::Phi3Postprocessor;
-use preprocessing::Phi3Preprocessor;
+pub use layers_worker::Phi3LayersWorker;
+pub use postprocessing::Phi3Postprocessor;
+pub use preprocessing::Phi3Preprocessor;
 use tokenizers::Tokenizer;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
     logits_processor::{LogitsProcessor, Sampling},
     token_output_stream::TokenOutputStream,
-    ModelLayersRanger, ModelLayersWorker, ModelPostprocessor, ModelPreprocessor, Session,
+    ModelLayersWorker, ModelPostprocessor, ModelPreprocessor, Session,
 };
 
 mod internal;
@@ -39,7 +39,7 @@ async fn tokenizer_path() -> PathBuf {
     repo.get("tokenizer.json").await.unwrap()
 }
 
-async fn model_path() -> PathBuf {
+pub async fn model_path() -> PathBuf {
     let api = Api::new().unwrap();
     let repo = api.repo(Repo::with_revision(
         "microsoft/Phi-3-mini-4k-instruct-gguf".to_string(),
@@ -49,27 +49,19 @@ async fn model_path() -> PathBuf {
     repo.get("Phi-3-mini-4k-instruct-q4.gguf").await.unwrap()
 }
 
-pub struct Phi3Model {
+pub struct Phi3Model<W: ModelLayersWorker<(Tensor, usize)>> {
     tokenizer: Tokenizer,
     preprocessor: Phi3Preprocessor,
-    layers_worker: Phi3LayersWorker,
+    layers_worker: W,
     postprocessor: Phi3Postprocessor,
 }
 
-impl Phi3Model {
-    pub async fn new(device: &Device, use_flash_attn: bool) -> Self {
+impl<W: ModelLayersWorker<(Tensor, usize)>> Phi3Model<W> {
+    pub async fn new(device: &Device, layers_worker: W) -> Self {
         let tokenizer = Tokenizer::from_file(tokenizer_path().await).unwrap();
         let mut model_file = std::fs::File::open(model_path().await).unwrap();
         let model = gguf_file::Content::read(&mut model_file).unwrap();
         let preprocessor = Phi3Preprocessor::new(&model, &mut model_file, device).unwrap();
-        let layers_worker = Phi3LayersWorker::new(
-            use_flash_attn,
-            ModelLayersRanger::new(0, 31),
-            &model,
-            &mut model_file,
-            device,
-        )
-        .unwrap();
         let postprocessor = Phi3Postprocessor::new(&model, &mut model_file, device).unwrap();
         Self {
             tokenizer,

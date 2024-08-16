@@ -4,3 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+tokio = { workspace = true, features = ["full"] }
+models = { path = "../../crates/models", version = "0.1.0" }
+log = { workspace = true }
+env_logger = { workspace = true }

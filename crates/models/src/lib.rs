@@ -1,20 +1,14 @@
 use candle_core::utils::{cuda_is_available, metal_is_available};
 use candle_core::{Device, Result};
+use protocol::Session;
 
 mod layers_cache;
 mod logits_processor;
 pub mod phi3;
 mod quantized_var_builder;
+pub mod remote;
 mod token_output_stream;
 mod utils;
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub struct Session(u64);
-impl Session {
-    pub fn new() -> Self {
-        Self(rand::random())
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 pub struct ModelLayersRanger {

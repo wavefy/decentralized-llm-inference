@@ -14,3 +14,6 @@ tokenizers = { version = "0.19.1", default-features = false }
 tokio = "1"
 rand = "0.8"
 spin = "0.9"
+bincode = "1"
+log = "0.4"
+env_logger = "0.11"

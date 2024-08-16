@@ -1,7 +1,4 @@
-use candle_core::{
-    quantized::{gguf_file, QTensor},
-    Device, IndexOp, Result, Tensor,
-};
+use candle_core::{quantized::gguf_file, Device, IndexOp, Result, Tensor};
 use candle_nn::{Module, RmsNorm};
 
 use crate::{ModelPostprocessor, Session};
@@ -39,11 +36,11 @@ impl Phi3Postprocessor {
 }
 
 impl ModelPostprocessor<(Tensor, usize), Tensor> for Phi3Postprocessor {
-    async fn forward(&self, session: Session, (xs, seq_len): (Tensor, usize)) -> Result<Tensor> {
+    async fn forward(&self, _session: Session, (xs, seq_len): (Tensor, usize)) -> Result<Tensor> {
         let xs = xs.apply(&self.output_norm)?.i((.., seq_len - 1, ..))?;
         let _enter = self.span.enter();
         self.output.forward(&xs)
     }
 
-    async fn finish(&self, session: Session) {}
+    async fn finish(&self, _session: Session) {}
 }

@@ -1,0 +1,32 @@
+//
+// Protocol for working with registry
+//
+
+syntax = "proto3";
+
+package registry;
+
+message RegisterRequest {
+    u64 from_layer = 1;
+    u64 to_layer = 2;
+    string addr = 3;
+}
+
+message RegisterReply {
+
+}
+
+message FindRequest {
+
+}
+
+message FindReply {
+    string first_addr = 1;
+    string last_addr = 2;
+    u32 hops = 3;
+}
+
+service RegistryHandler {
+    rpc register(RegisterRequest) returns (RegisterReply) {}
+    rpc find(FindRequest) returns (FindReply) {}
+}

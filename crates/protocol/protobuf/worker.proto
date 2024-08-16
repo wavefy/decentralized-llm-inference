@@ -1,0 +1,43 @@
+//
+// Protocol for working with worker
+//
+syntax = "proto3";
+
+package worker;
+
+message BeginRequest {
+    u64 session = 1;
+    u32 max_time_seconds = 2;
+    u32 from_layer = 3;
+    u32 to_layer = 4;
+    string next_addr = 5;
+}
+
+message BeginReply {
+
+}
+
+message ForwardRequest {
+    u64 session = 1,
+    // tensor buffer
+    // index_pos
+}
+
+message ForwardReply {
+    // tensor buffer
+}
+
+message FinishRequest {
+    u64 session = 1,
+}
+
+message FinishReply {
+
+}
+
+service WorkerHandler {
+    // Use for booking slot in worker
+    rpc begin(BeginRequest) returns (BeginReply) {}
+    rpc forward(ForwardRequest) returns (ForwardReply) {}
+    rpc finish(FinishRequest) returns (FinishReply) {}
+}
