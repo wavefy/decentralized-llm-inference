@@ -1,6 +1,7 @@
 [package]
-name = "openapi-server"
+name = "model-router"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+log = { workspace = true }

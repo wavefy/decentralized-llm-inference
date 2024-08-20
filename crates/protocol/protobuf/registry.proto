@@ -6,27 +6,35 @@ syntax = "proto3";
 
 package registry;
 
-message RegisterRequest {
-    u64 from_layer = 1;
-    u64 to_layer = 2;
-    string addr = 3;
+message Request {
+    message UpdateRequest {
+        uint32 from_layer = 1;
+        uint32 to_layer = 2;
+    }
+
+    message NeighboursRequest {
+
+    }
+
+    uint64 req_id = 1;
+    oneof req {
+        UpdateRequest update = 2;
+        NeighboursRequest neighbours = 3;
+    }
 }
 
-message RegisterReply {
+message Response {
+    message UpdateReply {
+        repeated string neighbours = 1;
+    }
 
-}
+    message NeighboursReply {
+        repeated string neighbours = 1;
+    }
 
-message FindRequest {
-
-}
-
-message FindReply {
-    string first_addr = 1;
-    string last_addr = 2;
-    u32 hops = 3;
-}
-
-service RegistryHandler {
-    rpc register(RegisterRequest) returns (RegisterReply) {}
-    rpc find(FindRequest) returns (FindReply) {}
+    uint64 req_id = 1;
+    oneof res {
+        UpdateReply update = 2;
+        NeighboursReply neighbours = 3;
+    }
 }

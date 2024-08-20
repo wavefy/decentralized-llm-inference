@@ -7,6 +7,17 @@ edition = "2021"
 network = { path = "../network", version = "0.1.0", default-features = false }
 protocol = { path = "../protocol", version = "0.1.0" }
 
+log = { workspace = true }
+
+tokio = { workspace = true, features = ["sync"] }
+poem = { workspace = true, optional = true }
+
+tokio-tungstenite = { workspace = true, optional = true }
+
+futures-util = { workspace = true }
+prost = { workspace = true }
+
 [features]
-client = []
-server = []
+default = ["client", "server"]
+client = ["tokio-tungstenite"]
+server = ["poem/websocket"]

@@ -5,3 +5,8 @@ edition = "2021"
 
 [dependencies]
 rand = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+
+[build-dependencies]
+prost-build = { workspace = true }

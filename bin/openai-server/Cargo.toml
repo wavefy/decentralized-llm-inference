@@ -1,5 +1,5 @@
 [package]
-name = "registry-server"
+name = "openai-server"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,4 +8,4 @@ log = { workspace = true }
 env_logger = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-registry = { path = "../../crates/registry", default-features = false, features = ["server"] }
+worker = { path = "../../crates/worker" }

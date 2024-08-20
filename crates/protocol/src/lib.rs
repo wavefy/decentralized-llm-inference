@@ -1,3 +1,11 @@
+pub mod registry {
+    include!(concat!(env!("OUT_DIR"), "/registry.rs"));
+}
+
+pub mod worker {
+    include!(concat!(env!("OUT_DIR"), "/worker.rs"));
+}
+
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct Session(u64);
 impl Session {

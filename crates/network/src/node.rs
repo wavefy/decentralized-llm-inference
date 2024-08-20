@@ -39,18 +39,20 @@ pub enum NodeEvent {
     MsgAck(Result<(), MsgError>),
 }
 
-pub struct Node {}
+pub struct NetworkNode {
+    node: NodeId,
+}
 
-impl Node {
-    pub fn new() -> Self {
-        Self {}
+impl NetworkNode {
+    pub fn new(node: NodeId) -> Self {
+        Self { node }
     }
 
     pub fn send(&mut self, dest: NodeId, data: Vec<u8>) -> Result<MsgId, MsgError> {
         todo!()
     }
 
-    pub fn offer(&mut self, dest: NodeId) -> Result<OutgoingId, OutgoingError> {
+    pub fn connect(&mut self, dest: NodeId) -> Result<OutgoingId, OutgoingError> {
         let offer = "TODO";
         todo!()
     }

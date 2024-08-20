@@ -1,11 +1,16 @@
 use network::addr::NodeId;
 use protocol::ModelLayersRanger;
 
-mod client;
-mod server;
+#[cfg(feature = "client")]
+pub mod client;
+#[cfg(feature = "server")]
+pub mod server;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
-pub struct OfferId(u64);
+pub struct ReqId(pub u64);
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct ModelId(pub String);
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum OfferError {}

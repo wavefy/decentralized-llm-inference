@@ -6,10 +6,10 @@ syntax = "proto3";
 package worker;
 
 message BeginRequest {
-    u64 session = 1;
-    u32 max_time_seconds = 2;
-    u32 from_layer = 3;
-    u32 to_layer = 4;
+    uint64 session = 1;
+    uint32 max_time_seconds = 2;
+    uint32 from_layer = 3;
+    uint32 to_layer = 4;
     string next_addr = 5;
 }
 
@@ -18,7 +18,7 @@ message BeginReply {
 }
 
 message ForwardRequest {
-    u64 session = 1,
+    uint64 session = 1;
     // tensor buffer
     // index_pos
 }
@@ -28,7 +28,7 @@ message ForwardReply {
 }
 
 message FinishRequest {
-    u64 session = 1,
+    uint64 session = 1;
 }
 
 message FinishReply {
