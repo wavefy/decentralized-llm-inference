@@ -8,12 +8,7 @@ pub struct QLinear {
 }
 
 impl QLinear {
-    pub fn new<R: std::io::Read + std::io::Seek>(
-        ct: &gguf_file::Content,
-        r: &mut R,
-        name: &str,
-        device: &Device,
-    ) -> Result<Self> {
+    pub fn new<R: std::io::Read + std::io::Seek>(ct: &gguf_file::Content, r: &mut R, name: &str, device: &Device) -> Result<Self> {
         let span = tracing::span!(tracing::Level::TRACE, "qmatmul");
         let w = ct.tensor(r, &format!("{name}.weight"), device)?;
         let inner = candle_core::quantized::QMatMul::from_qtensor(w)?;

@@ -13,22 +13,10 @@ impl<R: LayersRequester> ModelLayersWorker<(Tensor, usize)> for LayersWorkerRequ
         todo!()
     }
 
-    async fn forward(
-        &self,
-        session: Session,
-        (tensor, seq_len): (Tensor, usize),
-        index_pos: usize,
-    ) -> Result<(Tensor, usize)> {
+    async fn forward(&self, session: Session, (tensor, seq_len): (Tensor, usize), index_pos: usize) -> Result<(Tensor, usize)> {
         let res = self
             .remote
-            .request(
-                session,
-                RpcRequest {
-                    tensor,
-                    seq_len,
-                    index_pos,
-                },
-            )
+            .request(session, RpcRequest { tensor, seq_len, index_pos })
             .await
             .map_err(|e| Error::Io(std::io::Error::new(std::io::ErrorKind::BrokenPipe, e)))?;
 

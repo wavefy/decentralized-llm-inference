@@ -17,21 +17,14 @@ impl LayersCache {
         for _ in 0..len {
             layers_cache.push(Default::default());
         }
-        Self {
-            layers_cache,
-            dim,
-            max_seq_len,
-        }
+        Self { layers_cache, dim, max_seq_len }
     }
 
     pub fn get_cache(&self, idx: usize, session: Session) -> Arc<Mutex<KvCache>> {
         let slot = &self.layers_cache[idx];
 
         if !slot.read().contains_key(&session) {
-            slot.write().insert(
-                session,
-                Arc::new(Mutex::new(KvCache::new(self.dim, self.max_seq_len))),
-            );
+            slot.write().insert(session, Arc::new(Mutex::new(KvCache::new(self.dim, self.max_seq_len))));
         }
 
         slot.read().get(&session).unwrap().clone()

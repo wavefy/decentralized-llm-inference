@@ -17,19 +17,15 @@ use session_manager::SessionManager;
 use crate::ModelId;
 
 enum StreamEvent {
-    Start(ModelId, NodeId),
-    Req(
-        ModelId,
-        NodeId,
-        protocol::registry::request::Req,
-        tokio::sync::oneshot::Sender<protocol::registry::response::Res>,
-    ),
+    Start(ModelId, NodeId, Sender<protocol::registry::to_worker::Event>),
+    Event(ModelId, NodeId, protocol::registry::to_registry::Event),
     End(ModelId, NodeId),
 }
 
 pub struct RegistryServer {
     models: HashMap<ModelId, SessionManager>,
     stream_rx: Receiver<StreamEvent>,
+    streams_tx: HashMap<(ModelId, NodeId), Sender<protocol::registry::to_worker::Event>>,
 }
 
 impl RegistryServer {
@@ -45,22 +41,39 @@ impl RegistryServer {
         Self {
             models: Default::default(),
             stream_rx,
+            streams_tx: HashMap::new(),
+        }
+    }
+
+    pub async fn send(&mut self, model: ModelId, node: NodeId, data: protocol::registry::to_worker::Event) {
+        if let Some(tx) = self.streams_tx.get(&(model, node)) {
+            if let Err(e) = tx.send(data).await {
+                log::error!("[RegistryServer] send event to stream error {e:?}");
+            }
         }
     }
 
     pub async fn recv(&mut self) -> Option<()> {
         let event = self.stream_rx.recv().await?;
         match event {
-            StreamEvent::Start(model, node) => {
+            StreamEvent::Start(model, node, tx) => {
+                self.streams_tx.insert((model.clone(), node.clone()), tx);
                 let entry = self.models.entry(model).or_default();
                 entry.on_start(node);
             }
-            StreamEvent::Req(model, node, req, tx) => {
-                let entry = self.models.entry(model).or_default();
-                let res = entry.on_req(node, req);
-                tx.send(res).expect("Should send to main task");
+            StreamEvent::Event(model, node, event) => {
+                let entry = self.models.entry(model.clone()).or_default();
+                entry.on_event(node, event);
+                while let Some((dest, out)) = entry.pop_out() {
+                    if let Some(tx) = self.streams_tx.get(&(model.clone(), dest)) {
+                        if let Err(e) = tx.send(out).await {
+                            log::error!("[RegistryServer] send event to stream error {e:?}");
+                        }
+                    }
+                }
             }
             StreamEvent::End(model, node) => {
+                self.streams_tx.remove(&(model.clone(), node.clone()));
                 let entry = self.models.entry(model).or_default();
                 entry.on_end(node);
             }
@@ -70,11 +83,7 @@ impl RegistryServer {
 }
 
 #[handler]
-fn ws(
-    Path((model, node)): Path<(String, String)>,
-    ws: WebSocket,
-    stream_tx: Data<&Sender<StreamEvent>>,
-) -> impl IntoResponse {
+fn ws(Path((model, node)): Path<(String, String)>, ws: WebSocket, stream_tx: Data<&Sender<StreamEvent>>) -> impl IntoResponse {
     // TODO auth or
     let sender = stream_tx.clone();
     ws.on_upgrade(move |stream| async move {
@@ -82,52 +91,35 @@ fn ws(
         let model_id = ModelId(model.clone());
         let node_id = NodeId(node.clone());
         let mut protobuf_stream = ProtobufStream::new(stream);
-        sender
-            .send(StreamEvent::Start(model_id.clone(), node_id.clone()))
-            .await
-            .expect("Should send event main");
+        let (tx, mut rx) = channel(10);
+        sender.send(StreamEvent::Start(model_id.clone(), node_id.clone(), tx)).await.expect("Should send event main");
 
-        while let Some(Ok(req)) = protobuf_stream.read::<protocol::registry::Request>().await {
-            if let Some(req_inner) = req.req {
-                let (tx, mut rx) = tokio::sync::oneshot::channel();
-                sender
-                    .send(StreamEvent::Req(
-                        model_id.clone(),
-                        node_id.clone(),
-                        req_inner,
-                        tx,
-                    ))
-                    .await
-                    .expect("Should send req to main");
-                if let Ok(res) = rx.await {
-                    if let Err(e) = protobuf_stream
-                        .write(&protocol::registry::Response {
-                            req_id: req.req_id,
-                            res: Some(res),
-                        })
-                        .await
-                    {
-                        log::error!("[WebsocketStream] write response error {e:?}");
+        loop {
+            tokio::select! {
+                msg = protobuf_stream.read::<protocol::registry::ToRegistry>() => {
+                    if let Some(Ok(msg)) = msg {
+                        if let Some(event) = msg.event {
+                            sender.send(StreamEvent::Event(model_id.clone(), node_id.clone(), event)).await.expect("Should send req to main");
+                        } else {
+                            log::warn!("[WebsocketStream] request without body");
+                        };
+                    } else {
+                        break;
+                    }
+                },
+                out = rx.recv() => {
+                    if let Some(out) = out {
+                        if let Err(e) = protobuf_stream.write(&protocol::registry::ToWorker { event: Some(out) }).await {
+                            log::error!("[WebsocketStream] write response error {e:?}");
+                        }
+                    } else {
+                        break;
                     }
                 }
-            } else {
-                log::warn!("[WebsocketStream] request without body");
-                if let Err(e) = protobuf_stream
-                    .write(&protocol::registry::Response {
-                        req_id: req.req_id,
-                        res: None,
-                    })
-                    .await
-                {
-                    log::error!("[WebsocketStream] write response error {e:?}");
-                }
-            };
+            }
         }
 
-        sender
-            .send(StreamEvent::End(model_id, node_id))
-            .await
-            .expect("Should send event main");
+        sender.send(StreamEvent::End(model_id, node_id)).await.expect("Should send event main");
         log::info!("[WebsocketServer] on disconnected from {node} with model {model}");
     })
 }

@@ -15,16 +15,7 @@ async fn main() {
     let phi3 = Phi3Model::new(&device, layers_worker).await;
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     tokio::spawn(async move {
-        phi3.chat(
-            Session::new(),
-            &device,
-            299792458,
-            500,
-            "Write function max(x1, x2) in Rust",
-            tx,
-        )
-        .await
-        .unwrap();
+        phi3.chat(Session::new(), &device, 299792458, 500, "Write function max(x1, x2) in Rust", tx).await.unwrap();
     });
 
     let begin = Instant::now();
@@ -49,14 +40,7 @@ impl VirtualRemoteLayersWorker {
     async fn new(device: &Device) -> Self {
         let mut model_file = std::fs::File::open(model_path().await).unwrap();
         let model = gguf_file::Content::read(&mut model_file).unwrap();
-        let layers_worker = Phi3LayersWorker::new(
-            false,
-            ModelLayersRanger::new(0, 31),
-            &model,
-            &mut model_file,
-            &device,
-        )
-        .unwrap();
+        let layers_worker = Phi3LayersWorker::new(false, ModelLayersRanger::new(0, 31), &model, &mut model_file, &device).unwrap();
         Self {
             layers_worker,
             device: device.clone(),
@@ -69,17 +53,8 @@ impl ModelLayersWorker<(Tensor, usize)> for VirtualRemoteLayersWorker {
         self.layers_worker.layers()
     }
 
-    async fn forward(
-        &self,
-        session: Session,
-        (tensor, seq_len): (Tensor, usize),
-        index_pos: usize,
-    ) -> candle_core::Result<(Tensor, usize)> {
-        let req = RpcRequest {
-            tensor,
-            seq_len,
-            index_pos,
-        };
+    async fn forward(&self, session: Session, (tensor, seq_len): (Tensor, usize), index_pos: usize) -> candle_core::Result<(Tensor, usize)> {
+        let req = RpcRequest { tensor, seq_len, index_pos };
         let buf: Vec<u8> = req.into();
 
         // println!("convert req to buf {}", buf.len());
@@ -89,10 +64,7 @@ impl ModelLayersWorker<(Tensor, usize)> for VirtualRemoteLayersWorker {
 
         // println!("convert req from buf");
 
-        let (res_tensor, _) = self
-            .layers_worker
-            .forward(session, (req.tensor, req.seq_len), req.index_pos)
-            .await?;
+        let (res_tensor, _) = self.layers_worker.forward(session, (req.tensor, req.seq_len), req.index_pos).await?;
 
         //convert to bytes
         let res = RpcResponse { tensor: res_tensor };

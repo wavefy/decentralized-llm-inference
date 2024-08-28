@@ -12,11 +12,7 @@ pub struct Phi3Postprocessor {
 }
 
 impl Phi3Postprocessor {
-    pub fn new<R: std::io::Seek + std::io::Read>(
-        ct: &gguf_file::Content,
-        reader: &mut R,
-        device: &Device,
-    ) -> Result<Self> {
+    pub fn new<R: std::io::Seek + std::io::Read>(ct: &gguf_file::Content, reader: &mut R, device: &Device) -> Result<Self> {
         let md_get = |s: &str| match ct.metadata.get(s) {
             None => candle_core::bail!("cannot find {s} in metadata"),
             Some(v) => Ok(v),
@@ -27,11 +23,7 @@ impl Phi3Postprocessor {
         let output_norm = rms_norm(ct.tensor(reader, "output_norm.weight", device)?, rms_eps)?;
         let output = QLinear::new(&ct, reader, "output", device)?;
 
-        Ok(Self {
-            span,
-            output,
-            output_norm,
-        })
+        Ok(Self { span, output, output_norm })
     }
 }
 

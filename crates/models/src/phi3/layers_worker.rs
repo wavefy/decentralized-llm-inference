@@ -14,13 +14,7 @@ pub struct Phi3LayersWorker {
 }
 
 impl Phi3LayersWorker {
-    pub fn new<R: std::io::Seek + std::io::Read>(
-        use_flash_attn: bool,
-        range: ModelLayersRanger,
-        ct: &gguf_file::Content,
-        reader: &mut R,
-        device: &Device,
-    ) -> Result<Self> {
+    pub fn new<R: std::io::Seek + std::io::Read>(use_flash_attn: bool, range: ModelLayersRanger, ct: &gguf_file::Content, reader: &mut R, device: &Device) -> Result<Self> {
         let md_get = |s: &str| match ct.metadata.get(s) {
             None => candle_core::bail!("cannot find {s} in metadata"),
             Some(v) => Ok(v),
@@ -42,21 +36,10 @@ impl Phi3LayersWorker {
             println!("load layer {layer_idx}");
             let prefix = format!("blk.{layer_idx}");
             let ffn_up = QLinear::new(&ct, reader, &format!("{prefix}.ffn_up"), device).unwrap();
-            let ffn_down =
-                QLinear::new(&ct, reader, &format!("{prefix}.ffn_down"), device).unwrap();
-            let mlp = Mlp {
-                ffn_up,
-                ffn_down,
-                i_size,
-            };
-            let attn_norm = rms_norm(
-                ct.tensor(reader, &format!("{prefix}.attn_norm.weight"), device)?,
-                rms_eps,
-            )?;
-            let ffn_norm = rms_norm(
-                ct.tensor(reader, &format!("{prefix}.ffn_norm.weight"), device)?,
-                rms_eps,
-            )?;
+            let ffn_down = QLinear::new(&ct, reader, &format!("{prefix}.ffn_down"), device).unwrap();
+            let mlp = Mlp { ffn_up, ffn_down, i_size };
+            let attn_norm = rms_norm(ct.tensor(reader, &format!("{prefix}.attn_norm.weight"), device)?, rms_eps)?;
+            let ffn_norm = rms_norm(ct.tensor(reader, &format!("{prefix}.ffn_norm.weight"), device)?, rms_eps)?;
             let span_attn = tracing::span!(tracing::Level::TRACE, "attn");
             let span_rot = tracing::span!(tracing::Level::TRACE, "attn-rot");
             layers.push(LayerWeights {
@@ -89,9 +72,7 @@ impl Phi3LayersWorker {
 
     fn mask(&self, t: usize, device: &Device) -> Result<Tensor> {
         //TODO use LRU
-        let mask: Vec<_> = (0..t)
-            .flat_map(|i| (0..t).map(move |j| u8::from(j > i)))
-            .collect();
+        let mask: Vec<_> = (0..t).flat_map(|i| (0..t).map(move |j| u8::from(j > i))).collect();
         let mask = Tensor::from_slice(&mask, (t, t), device)?;
         Ok(mask)
     }
@@ -102,12 +83,7 @@ impl ModelLayersWorker<(Tensor, usize)> for Phi3LayersWorker {
         self.range
     }
 
-    async fn forward(
-        &self,
-        session: Session,
-        (mut xs, seq_len): (Tensor, usize),
-        index_pos: usize,
-    ) -> Result<(Tensor, usize)> {
+    async fn forward(&self, session: Session, (mut xs, seq_len): (Tensor, usize), index_pos: usize) -> Result<(Tensor, usize)> {
         let _span = self.span.enter();
         let mask = if seq_len == 1 {
             None
@@ -135,16 +111,8 @@ impl ModelLayersWorker<(Tensor, usize)> for Phi3LayersWorker {
     }
 }
 
-fn precomput_freqs_cis(
-    head_dim: usize,
-    max_seq_len: usize,
-    freq_base: f32,
-    device: &Device,
-) -> Result<(Tensor, Tensor)> {
-    let theta: Vec<_> = (0..head_dim)
-        .step_by(2)
-        .map(|i| 1f32 / freq_base.powf(i as f32 / head_dim as f32))
-        .collect();
+fn precomput_freqs_cis(head_dim: usize, max_seq_len: usize, freq_base: f32, device: &Device) -> Result<(Tensor, Tensor)> {
+    let theta: Vec<_> = (0..head_dim).step_by(2).map(|i| 1f32 / freq_base.powf(i as f32 / head_dim as f32)).collect();
     let theta = Tensor::new(theta.as_slice(), device)?;
     let idx_theta = Tensor::arange(0, max_seq_len as u32, device)?
         .to_dtype(DType::F32)?

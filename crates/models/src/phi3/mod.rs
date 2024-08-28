@@ -31,21 +31,13 @@ fn rms_norm(w: QTensor, eps: f64) -> Result<RmsNorm> {
 
 async fn tokenizer_path() -> PathBuf {
     let api = Api::new().unwrap();
-    let repo = api.repo(Repo::with_revision(
-        "microsoft/Phi-3-mini-4k-instruct".to_string(),
-        RepoType::Model,
-        "main".to_string(),
-    ));
+    let repo = api.repo(Repo::with_revision("microsoft/Phi-3-mini-4k-instruct".to_string(), RepoType::Model, "main".to_string()));
     repo.get("tokenizer.json").await.unwrap()
 }
 
 pub async fn model_path() -> PathBuf {
     let api = Api::new().unwrap();
-    let repo = api.repo(Repo::with_revision(
-        "microsoft/Phi-3-mini-4k-instruct-gguf".to_string(),
-        RepoType::Model,
-        "main".to_string(),
-    ));
+    let repo = api.repo(Repo::with_revision("microsoft/Phi-3-mini-4k-instruct-gguf".to_string(), RepoType::Model, "main".to_string()));
     repo.get("Phi-3-mini-4k-instruct-q4.gguf").await.unwrap()
 }
 
@@ -71,15 +63,7 @@ impl<W: ModelLayersWorker<(Tensor, usize)>> Phi3Model<W> {
         }
     }
 
-    pub async fn chat(
-        &self,
-        session: Session,
-        device: &Device,
-        seed: u64,
-        max_len: usize,
-        prompt: &str,
-        tx: Sender<String>,
-    ) -> Result<()> {
+    pub async fn chat(&self, session: Session, device: &Device, seed: u64, max_len: usize, prompt: &str, tx: Sender<String>) -> Result<()> {
         let mut tos = TokenOutputStream::new(self.tokenizer.clone());
         let tokens = tos.tokenizer().encode(prompt, true).unwrap();
         let mut all_tokens = vec![];
@@ -100,19 +84,12 @@ impl<W: ModelLayersWorker<(Tensor, usize)>> Phi3Model<W> {
         if let Some(t) = tos.next_token(next_token)? {
             tx.send(t).await.unwrap();
         }
-        let eos_token = *tos
-            .tokenizer()
-            .get_vocab(true)
-            .get("<|endoftext|>")
-            .unwrap();
+        let eos_token = *tos.tokenizer().get_vocab(true).get("<|endoftext|>").unwrap();
 
         for index in 0..max_len {
             let input = Tensor::new(&[next_token], &device)?.unsqueeze(0)?;
             let step1 = self.preprocessor.forward(session, input).await?;
-            let step2 = self
-                .layers_worker
-                .forward(session, step1, tokens.len() + index)
-                .await?;
+            let step2 = self.layers_worker.forward(session, step1, tokens.len() + index).await?;
             let logits = self.postprocessor.forward(session, step2).await?;
             let logits = logits.squeeze(0)?;
             next_token = logits_processor.sample(&logits)?;

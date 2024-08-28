@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 log = { workspace = true }
-env_logger = { workspace = true }
 clap = { workspace = true }
+tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 worker = { path = "../../crates/worker" }

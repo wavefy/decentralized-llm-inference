@@ -22,7 +22,13 @@ impl LogitsProcessor {
     }
 
     pub fn new(seed: u64, temperature: Option<f64>, top_p: Option<f64>) -> Self {
-        let temperature = temperature.and_then(|v| if v < 1e-7 { None } else { Some(v) });
+        let temperature = temperature.and_then(|v| {
+            if v < 1e-7 {
+                None
+            } else {
+                Some(v)
+            }
+        });
         let sampling = match temperature {
             None => Sampling::ArgMax,
             Some(temperature) => match top_p {
@@ -35,12 +41,7 @@ impl LogitsProcessor {
 
     fn sample_argmax(&mut self, logits: Tensor) -> Result<u32> {
         let logits_v: Vec<f32> = logits.to_vec1()?;
-        let next_token = logits_v
-            .iter()
-            .enumerate()
-            .max_by(|(_, u), (_, v)| u.total_cmp(v))
-            .map(|(i, _)| i as u32)
-            .unwrap();
+        let next_token = logits_v.iter().enumerate().max_by(|(_, u), (_, v)| u.total_cmp(v)).map(|(i, _)| i as u32).unwrap();
         Ok(next_token)
     }
 
@@ -78,8 +79,7 @@ impl LogitsProcessor {
             self.sample_multinomial(prs)
         } else {
             let mut argsort_indices = (0..prs.len()).collect::<Vec<_>>();
-            let (indices, _, _) =
-                argsort_indices.select_nth_unstable_by(top_k, |&i, &j| prs[j].total_cmp(&prs[i]));
+            let (indices, _, _) = argsort_indices.select_nth_unstable_by(top_k, |&i, &j| prs[j].total_cmp(&prs[i]));
             let prs = indices.iter().map(|&i| prs[i]).collect::<Vec<_>>();
             let index = self.sample_multinomial(&prs)?;
             Ok(indices[index as usize] as u32)
@@ -93,8 +93,7 @@ impl LogitsProcessor {
             self.sample_topp(prs, top_p)
         } else {
             let mut argsort_indices = (0..prs.len()).collect::<Vec<_>>();
-            let (indices, _, _) =
-                argsort_indices.select_nth_unstable_by(top_k, |&i, &j| prs[j].total_cmp(&prs[i]));
+            let (indices, _, _) = argsort_indices.select_nth_unstable_by(top_k, |&i, &j| prs[j].total_cmp(&prs[i]));
             let mut prs = indices.iter().map(|&i| prs[i]).collect::<Vec<_>>();
             let sum_p = prs.iter().sum::<f32>();
             let index = if top_p <= 0.0 || top_p >= sum_p {

@@ -7,6 +7,8 @@ edition = "2021"
 protocol = { path = "../protocol", version = "0.1.0" }
 tokio = { workspace = true, features = ["sync"] }
 str0m = "0.6"
+log = { workspace = true }
+rand = { workspace = true }
 
 [features]
 default = ["full"]

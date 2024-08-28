@@ -1,11 +1,12 @@
 use std::collections::VecDeque;
 
-use network::addr::NodeId;
+use network::{addr::NodeId, node::ConnId};
 use protobuf_stream::ProtobufStream;
 use protocol::{
     registry::{
-        request::{self, UpdateRequest},
-        Request, Response,
+        relay_data,
+        to_registry::{self, UpdateRequest},
+        RelayData, ToRegistry, ToWorker,
     },
     ModelLayersRanger,
 };
@@ -13,20 +14,18 @@ use tokio_tungstenite::connect_async;
 
 mod protobuf_stream;
 
-use crate::{AnswerError, NeighbourInfo, OfferError, ReqId};
+use crate::{AnswerError, OfferError};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RegistryClientEvent {
-    Updated(ReqId),
-    Answer(ReqId, Result<String, OfferError>),
-    Offer(NodeId, ReqId, String),
-    Neighbours(Vec<NeighbourInfo>),
+    Answer(NodeId, ConnId, String),
+    Offer(NodeId, ConnId, String),
+    Neighbours(Vec<NodeId>),
 }
 
 pub struct RegistryClient {
     stream: ProtobufStream,
-    req_id_seed: u64,
-    queue: VecDeque<Request>,
+    queue: VecDeque<ToRegistry>,
 }
 
 impl RegistryClient {
@@ -39,33 +38,57 @@ impl RegistryClient {
 
         Self {
             stream: ProtobufStream::new(ws_stream),
-            req_id_seed: 0,
             queue: VecDeque::new(),
         }
     }
 
-    pub fn update_layer(&mut self, layers_range: ModelLayersRanger) -> ReqId {
-        let req_id = self.gen_req_id();
-        self.queue.push_back(Request {
-            req_id: req_id.0,
-            req: Some(request::Req::Update(UpdateRequest {
+    pub fn update_layer(&mut self, layers_range: ModelLayersRanger) {
+        self.queue.push_back(ToRegistry {
+            event: Some(to_registry::Event::Update(UpdateRequest {
                 from_layer: layers_range.from,
                 to_layer: layers_range.to,
             })),
         });
-        req_id
     }
 
-    pub fn find_neigbours(&mut self) -> ReqId {
-        todo!()
+    pub fn find_neigbours(&mut self) {
+        self.queue.push_back(ToRegistry {
+            event: Some(to_registry::Event::Neighbours(to_registry::NeighboursRequest {})),
+        });
     }
 
-    pub fn offer(&mut self, dest: NodeId, offer: &str) -> ReqId {
-        todo!()
+    pub fn offer(&mut self, dest: NodeId, conn_id: ConnId, offer: &str) {
+        log::info!("[RegistryClient] offer to {dest:?}");
+        self.queue.push_back(ToRegistry {
+            event: Some(to_registry::Event::Relay(to_registry::Relay {
+                dest: dest.0,
+                data: Some(RelayData {
+                    data: Some(relay_data::Data::Offer(relay_data::Offer {
+                        conn_id: conn_id.0,
+                        sdp: offer.to_owned(),
+                    })),
+                }),
+            })),
+        });
     }
 
-    pub fn answer(&mut self, dest: NodeId, req_id: ReqId, answer: Result<String, AnswerError>) {
-        todo!()
+    pub fn answer(&mut self, dest: NodeId, conn_id: ConnId, answer: Result<String, AnswerError>) {
+        log::info!("[RegistryClient] answer to {dest:?}, {}", answer.as_ref().unwrap());
+        self.queue.push_back(ToRegistry {
+            event: Some(to_registry::Event::Relay(to_registry::Relay {
+                dest: dest.0,
+                data: Some(RelayData {
+                    data: Some(relay_data::Data::Answer(relay_data::Answer {
+                        conn_id: conn_id.0,
+                        sdp: answer.unwrap(),
+                    })),
+                }),
+            })),
+        });
+    }
+
+    pub async fn shutdown(&mut self) {
+        self.stream.shutdown().await;
     }
 
     pub async fn recv(&mut self) -> Option<Result<RegistryClientEvent, String>> {
@@ -74,20 +97,26 @@ impl RegistryClient {
         }
 
         loop {
-            match self.stream.read::<Response>().await? {
-                Ok(event) => match event.res? {
-                    protocol::registry::response::Res::Update(res) => {
+            match self.stream.read::<ToWorker>().await? {
+                Ok(event) => match event.event? {
+                    protocol::registry::to_worker::Event::Update(res) => {
                         log::info!("[RegistryClient] will connect to {:?}", res.neighbours);
+                        break Some(Ok(RegistryClientEvent::Neighbours(res.neighbours.into_iter().map(|n| NodeId(n)).collect::<Vec<_>>())));
                     }
-                    protocol::registry::response::Res::Neighbours(_) => todo!(),
+                    protocol::registry::to_worker::Event::Neighbours(_) => todo!(),
+                    protocol::registry::to_worker::Event::Relay(relay) => match relay.data {
+                        Some(data) => match data.data {
+                            Some(data) => match data {
+                                relay_data::Data::Offer(offer) => break Some(Ok(RegistryClientEvent::Offer(NodeId(relay.source), ConnId(offer.conn_id), offer.sdp))),
+                                relay_data::Data::Answer(answer) => break Some(Ok(RegistryClientEvent::Answer(NodeId(relay.source), ConnId(answer.conn_id), answer.sdp))),
+                            },
+                            None => {}
+                        },
+                        None => {}
+                    },
                 },
                 Err(err) => break Some(Err(err.to_string())),
             }
         }
-    }
-
-    fn gen_req_id(&mut self) -> ReqId {
-        self.req_id_seed += 1;
-        ReqId(self.req_id_seed)
     }
 }

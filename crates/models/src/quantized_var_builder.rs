@@ -68,10 +68,7 @@ impl VarBuilder {
             Some(qtensor) => {
                 let shape = s.into();
                 if qtensor.shape() != &shape {
-                    candle_core::bail!(
-                        "shape mismatch for {name}, got {:?}, expected {shape:?}",
-                        qtensor.shape()
-                    )
+                    candle_core::bail!("shape mismatch for {name}, got {:?}, expected {shape:?}", qtensor.shape())
                 }
                 Ok(qtensor.clone())
             }

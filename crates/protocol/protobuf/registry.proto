@@ -6,7 +6,24 @@ syntax = "proto3";
 
 package registry;
 
-message Request {
+message RelayData {
+    message Offer {
+        uint64 conn_id = 2;
+        string sdp = 3;
+    }
+
+    message Answer {
+        uint64 conn_id = 2;
+        string sdp = 3;
+    }
+
+    oneof data {
+        Offer offer = 3;
+        Answer answer = 4;
+    }
+}
+
+message ToRegistry {
     message UpdateRequest {
         uint32 from_layer = 1;
         uint32 to_layer = 2;
@@ -16,14 +33,19 @@ message Request {
 
     }
 
-    uint64 req_id = 1;
-    oneof req {
+    message Relay {
+        string dest = 1;
+        RelayData data = 2;
+    }
+
+    oneof event {
         UpdateRequest update = 2;
         NeighboursRequest neighbours = 3;
+        Relay relay = 4;
     }
 }
 
-message Response {
+message ToWorker {
     message UpdateReply {
         repeated string neighbours = 1;
     }
@@ -32,9 +54,14 @@ message Response {
         repeated string neighbours = 1;
     }
 
-    uint64 req_id = 1;
-    oneof res {
+    message Relay {
+        string source = 1;
+        RelayData data = 2;
+    }
+
+    oneof event {
         UpdateReply update = 2;
         NeighboursReply neighbours = 3;
+        Relay relay = 4;
     }
 }

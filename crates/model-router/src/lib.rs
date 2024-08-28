@@ -8,14 +8,8 @@ pub struct ModelRange {
 }
 
 enum NextLayer<Node> {
-    Local {
-        cost: u32,
-    },
-    Remote {
-        next: Node,
-        cost: u32,
-        last_updated: u64,
-    },
+    Local { cost: u32 },
+    Remote { next: Node, cost: u32, last_updated: u64 },
 }
 
 struct RemoteContainer<Node> {
@@ -62,13 +56,7 @@ impl<Node: Hash + Eq + PartialEq + Copy + Clone + 'static> ModelRouter<Node> {
         }
     }
 
-    pub fn on_remote_sync(
-        &mut self,
-        now_ms: u64,
-        from: Node,
-        cost: u32,
-        sync: ModelRouterSync<Node>,
-    ) {
+    pub fn on_remote_sync(&mut self, now_ms: u64, from: Node, cost: u32, sync: ModelRouterSync<Node>) {
         let entry = self.remotes.entry(from).or_insert_with(|| RemoteContainer {
             layers: vec![],
             last_updated: now_ms,

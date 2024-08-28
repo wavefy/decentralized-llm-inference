@@ -37,13 +37,7 @@ impl LayerWeights {
         candle_nn::rotary_emb::rope(&xs.contiguous()?, &cos, &sin)
     }
 
-    pub fn forward_attn(
-        &self,
-        x: &Tensor,
-        mask: Option<&Tensor>,
-        index_pos: usize,
-        kv_cache: &mut KvCache,
-    ) -> Result<Tensor> {
+    pub fn forward_attn(&self, x: &Tensor, mask: Option<&Tensor>, index_pos: usize, kv_cache: &mut KvCache) -> Result<Tensor> {
         let _enter = self.span_attn.enter();
         let (b_sz, seq_len, n_embd) = x.dims3()?;
         let qkv = self.attn_qkv.forward(x)?;
@@ -51,21 +45,11 @@ impl LayerWeights {
         let query_pos = self.n_head * self.head_dim;
         let q = qkv.narrow(D::Minus1, 0, query_pos)?;
         let k = qkv.narrow(D::Minus1, query_pos, self.n_kv_head * self.head_dim)?;
-        let v = qkv.narrow(
-            D::Minus1,
-            query_pos + self.n_kv_head * self.head_dim,
-            self.n_kv_head * self.head_dim,
-        )?;
+        let v = qkv.narrow(D::Minus1, query_pos + self.n_kv_head * self.head_dim, self.n_kv_head * self.head_dim)?;
 
-        let q = q
-            .reshape((b_sz, seq_len, self.n_head, self.head_dim))?
-            .transpose(1, 2)?;
-        let k = k
-            .reshape((b_sz, seq_len, self.n_head, self.head_dim))?
-            .transpose(1, 2)?;
-        let v = v
-            .reshape((b_sz, seq_len, self.n_kv_head, self.head_dim))?
-            .transpose(1, 2)?;
+        let q = q.reshape((b_sz, seq_len, self.n_head, self.head_dim))?.transpose(1, 2)?;
+        let k = k.reshape((b_sz, seq_len, self.n_head, self.head_dim))?.transpose(1, 2)?;
+        let v = v.reshape((b_sz, seq_len, self.n_kv_head, self.head_dim))?.transpose(1, 2)?;
 
         let q = self.apply_rotary_emb(&q, index_pos)?.contiguous()?;
         let k = self.apply_rotary_emb(&k, index_pos)?;
@@ -81,9 +65,7 @@ impl LayerWeights {
             let k = k.to_dtype(DType::BF16)?.transpose(1, 2)?;
             let v = v.to_dtype(DType::BF16)?.transpose(1, 2)?;
             let softmax_scale = 1f32 / (self.head_dim as f32).sqrt();
-            flash_attn(&q, &k, &v, softmax_scale, seq_len > 1)?
-                .to_dtype(DType::F32)?
-                .transpose(1, 2)?
+            flash_attn(&q, &k, &v, softmax_scale, seq_len > 1)?.to_dtype(DType::F32)?.transpose(1, 2)?
         } else {
             let att = (q.matmul(&k.t()?)? / (self.head_dim as f64).sqrt())?;
             let att = match mask {
@@ -104,13 +86,7 @@ impl LayerWeights {
 }
 
 #[cfg(feature = "flash-attn")]
-fn flash_attn(
-    q: &Tensor,
-    k: &Tensor,
-    v: &Tensor,
-    softmax_scale: f32,
-    causal: bool,
-) -> Result<Tensor> {
+fn flash_attn(q: &Tensor, k: &Tensor, v: &Tensor, softmax_scale: f32, causal: bool) -> Result<Tensor> {
     candle_flash_attn::flash_attn(q, k, v, softmax_scale, causal)
 }
 

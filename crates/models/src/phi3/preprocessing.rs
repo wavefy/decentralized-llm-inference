@@ -9,11 +9,7 @@ pub struct Phi3Preprocessor {
 }
 
 impl Phi3Preprocessor {
-    pub fn new<R: std::io::Seek + std::io::Read>(
-        ct: &gguf_file::Content,
-        reader: &mut R,
-        device: &Device,
-    ) -> Result<Self> {
+    pub fn new<R: std::io::Seek + std::io::Read>(ct: &gguf_file::Content, reader: &mut R, device: &Device) -> Result<Self> {
         let md_get = |s: &str| match ct.metadata.get(s) {
             None => candle_core::bail!("cannot find {s} in metadata"),
             Some(v) => Ok(v),
