@@ -10,25 +10,28 @@ pub mod remote;
 mod token_output_stream;
 mod utils;
 
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 pub trait ModelPreprocessor<IN, OUT> {
+    async fn start(&self, session: Session);
     /// Async function for allowing remote execute
     /// This function convert from raw (text or other) to embedding
     async fn forward(&self, session: Session, input: IN) -> Result<OUT>;
     async fn finish(&self, session: Session);
 }
 
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 pub trait ModelLayersWorker<E> {
     fn layers(&self) -> ModelLayersRanger;
+    async fn start(&self, session: Session);
     /// Async function for allowing remote execute
     /// This function calculate from input to output embedding
-    async fn forward(&self, session: Session, embedding: E, index_pos: usize) -> Result<E>;
+    async fn forward(&self, session: Session, step: u32, embedding: E, index_pos: u32) -> Result<E>;
     async fn finish(&self, session: Session);
 }
 
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 pub trait ModelPostprocessor<IN, OUT> {
+    async fn start(&self, session: Session);
     /// Async function for allowing remote execute
     /// This function convert embedding to output
     async fn forward(&self, session: Session, input: IN) -> Result<OUT>;

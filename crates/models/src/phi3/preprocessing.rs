@@ -27,11 +27,14 @@ impl Phi3Preprocessor {
     }
 }
 
-impl ModelPreprocessor<Tensor, (Tensor, usize)> for Phi3Preprocessor {
-    async fn forward(&self, _session: Session, xs: Tensor) -> Result<(Tensor, usize)> {
+#[async_trait::async_trait]
+impl ModelPreprocessor<Tensor, (Tensor, u32)> for Phi3Preprocessor {
+    async fn start(&self, session: Session) {}
+
+    async fn forward(&self, _session: Session, xs: Tensor) -> Result<(Tensor, u32)> {
         let (_b_sz, seq_len) = xs.dims2()?;
         let _enter = self.span.enter();
-        self.tok_embeddings.forward(&xs).map(|e| (e, seq_len))
+        self.tok_embeddings.forward(&xs).map(|e| (e, seq_len as u32))
     }
 
     async fn finish(&self, _session: Session) {}

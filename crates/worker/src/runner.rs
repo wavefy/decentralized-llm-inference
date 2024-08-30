@@ -1,6 +1,8 @@
 use std::{collections::HashMap, time::Duration};
 
+use candle_core::{Device, Tensor};
 use model_router::ModelRouter;
+use models::{remote::TensorBuf, ModelLayersWorker};
 use network::{
     addr::NodeId,
     node::{NetworkNode, NodeEvent},
@@ -12,38 +14,41 @@ use registry::{
 };
 use session::LlmSession;
 use tokio::{
-    sync::mpsc::{channel, Receiver, Sender},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        oneshot,
+    },
     time::{Instant, Interval},
 };
+
+use crate::VirtualModelLayers;
 
 mod session;
 
 pub enum LlmReq {
     Start(Session),
-    Forward(Session, u32, Vec<u8>),
+    Forward(Session, u32, Vec<u8>, u32, u32),
     End(Session),
 }
 
 pub enum LlmRes {
     Start(Session),
-    Backward(Session, u32, Vec<u8>),
+    Backward(Session, u32, Vec<u8>, u32, u32),
     End(Session),
 }
 
+#[derive(Debug)]
 pub enum SessionReq {
     Start,
-    Forward(u32, Vec<u8>),
+    Forward(u32, Vec<u8>, u32, u32),
     Stop,
 }
 
+#[derive(Debug)]
 pub enum SessionRes {
     Started(NodeId),
-    Backward(u32, Vec<u8>),
+    Backward(u32, Vec<u8>, u32, u32),
     Stopped(NodeId),
-}
-
-pub enum WorkerRunnerEvent {
-    Session(Session, SessionRes),
 }
 
 pub struct WorkerRunner {
@@ -56,17 +61,35 @@ pub struct WorkerRunner {
     sessions: HashMap<Session, LlmSession>,
     llm_req_tx: Sender<LlmReq>,
     llm_res_rx: Receiver<LlmRes>,
+    session_control_rx: Receiver<(Session, SessionReq, oneshot::Sender<SessionRes>)>,
 }
 
 impl WorkerRunner {
-    pub async fn new(registry_endpoint: &str, model: &str, node_id: &str, from: u32, to: u32, total: u32) -> Self {
+    // TODO make layers_worker generic
+    pub async fn new<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static>(
+        registry_endpoint: &str,
+        device: Device,
+        layers_worker: LW,
+        model: &str,
+        node_id: &str,
+        from: u32,
+        to: u32,
+        total: u32,
+    ) -> (Self, VirtualModelLayers) {
         log::info!("[WorkerRunner] start with node {node_id} with model {model}, layers [{from}-{to}] / total {total}");
         let node_id = NodeId(node_id.to_string());
         let mut registry_client = RegistryClient::new(registry_endpoint, model, node_id.clone()).await;
         registry_client.update_layer(ModelLayersRanger { from, to });
 
+        let (session_control_tx, session_control_rx) = channel(10);
+        let model_layers = VirtualModelLayers {
+            device: device.clone(),
+            session_control: session_control_tx,
+        };
+
         let (llm_res_tx, llm_res_rx) = channel(10);
         let (llm_req_tx, mut llm_req_rx) = channel(10);
+
         // task for running all process
         tokio::spawn(async move {
             while let Some(req) = llm_req_rx.recv().await {
@@ -74,76 +97,48 @@ impl WorkerRunner {
                 match req {
                     LlmReq::Start(session) => {
                         log::info!("[WorkerRunner] llm core processing {session:?} start");
+                        layers_worker.start(session).await;
+                        log::info!("[WorkerRunner] llm core processed {session:?} start");
                         llm_res_tx.send(LlmRes::Start(session)).await.unwrap();
                     }
-                    LlmReq::Forward(session, step, mut payload) => {
-                        log::info!("[WorkerRunner] llm core processing {session:?} forward step {step}");
-                        payload.fill('a' as u8 + step as u8);
-                        llm_res_tx.send(LlmRes::Backward(session, step, payload)).await.unwrap();
+                    LlmReq::Forward(session, step, payload, seq_len, index_pos) => {
+                        let start_ms = Instant::now();
+                        log::info!("[WorkerRunner] llm core processing {session:?} forward step {step}, payload {} bytes", payload.len());
+                        let tensor = TensorBuf::try_from(payload).unwrap().to_tensor(&device).unwrap();
+                        let (res_tensor, _) = layers_worker.forward(session, step, (tensor, seq_len), index_pos).await.unwrap();
+                        let res_tensor = TensorBuf::from(res_tensor).to_vec();
+                        log::info!(
+                            "[WorkerRunner] llm core processed {session:?} forward step {step}, res payload {} bytes take {:?}",
+                            res_tensor.len(),
+                            start_ms.elapsed()
+                        );
+                        llm_res_tx.send(LlmRes::Backward(session, step, res_tensor, seq_len, index_pos)).await.unwrap();
                     }
                     LlmReq::End(session) => {
                         log::info!("[WorkerRunner] llm core processing {session:?} end");
+                        layers_worker.finish(session).await;
+                        log::info!("[WorkerRunner] llm core processed {session:?} end");
                         llm_res_tx.send(LlmRes::End(session)).await.unwrap();
                     }
                 }
             }
         });
 
-        Self {
-            node: node_id.clone(),
-            registry_client,
-            router: ModelRouter::new(node_id.clone(), from, to, total),
-            network: NetworkNode::new(node_id).await,
-            ticker: tokio::time::interval(Duration::from_millis(1000)),
-            started: Instant::now(),
-            sessions: HashMap::new(),
-            llm_req_tx,
-            llm_res_rx,
-        }
-    }
-
-    pub fn session_req(&mut self, session: Session, req: SessionReq) -> Option<()> {
-        match req {
-            SessionReq::Start => {
-                let action = self.router.next_for(0)?;
-                log::info!("[WorkerRunner] select action {action:?} for session {session:?} with next layer is 0");
-                let llm_session = LlmSession::new(session, None, action);
-                if llm_session.is_local_process() {
-                    log::info!("[WorkerRunner] session {session:?} process start_req local");
-                    self.llm_req_tx.try_send(LlmReq::Start(session)).unwrap();
-                } else {
-                    log::info!("[WorkerRunner] session {session:?} don't process start_req local");
-                    let (next, event) = llm_session.start_req_next();
-                    self.network.send(next, &event).ok()?;
-                }
-                self.sessions.insert(session, llm_session);
-                Some(())
-            }
-            SessionReq::Forward(step, payload) => {
-                let llm_session = self.sessions.get(&session)?;
-                if llm_session.is_local_process() {
-                    log::info!("[WorkerRunner] session {session:?} process forward_req local");
-                    self.llm_req_tx.try_send(LlmReq::Forward(session, step, payload)).unwrap();
-                } else {
-                    log::info!("[WorkerRunner] session {session:?} don't process forward_req local");
-                    let (next, event) = llm_session.forward_req_next(step, payload);
-                    self.network.send(next, &event).ok()?;
-                }
-                Some(())
-            }
-            SessionReq::Stop => {
-                let llm_session = self.sessions.get(&session)?;
-                if llm_session.is_local_process() {
-                    log::info!("[WorkerRunner] session {session:?} process end_req local");
-                    self.llm_req_tx.try_send(LlmReq::End(session)).unwrap();
-                } else {
-                    log::info!("[WorkerRunner] session {session:?} don't process end_req local");
-                    let (next, event) = llm_session.end_req_next();
-                    self.network.send(next, &event).ok()?;
-                }
-                Some(())
-            }
-        }
+        (
+            Self {
+                node: node_id.clone(),
+                registry_client,
+                router: ModelRouter::new(node_id.clone(), from, to, total),
+                network: NetworkNode::new(node_id).await,
+                ticker: tokio::time::interval(Duration::from_millis(1000)),
+                started: Instant::now(),
+                sessions: HashMap::new(),
+                llm_req_tx,
+                llm_res_rx,
+                session_control_rx,
+            },
+            model_layers,
+        )
     }
 
     pub async fn shutdown(&mut self) {
@@ -151,7 +146,7 @@ impl WorkerRunner {
         self.network.shutdown().await
     }
 
-    pub async fn recv(&mut self) -> Option<WorkerRunnerEvent> {
+    pub async fn recv(&mut self) -> Option<()> {
         loop {
             tokio::select! {
                 _ = self.ticker.tick() => {
@@ -190,19 +185,15 @@ impl WorkerRunner {
                 },
                 res = self.llm_res_rx.recv() => match res.unwrap() {
                     LlmRes::Start(session) => {
-                        let llm_session = self.sessions.get(&session).unwrap();
+                        let llm_session = self.sessions.get_mut(&session).unwrap();
                         let (next, event) = llm_session.start_req_next();
                         if let Err(e) = self.network.send(next, &event) {
                             log::error!("[WorkerRunner] start_req: next layer event error {e:?}");
                         }
                     },
-                    LlmRes::Backward(session, step, mut payload) => {
+                    LlmRes::Backward(session, step, payload, seq_len, index_pos) => {
                         let llm_session = self.sessions.get(&session).unwrap();
-                        if step == 10 && llm_session.is_last() {
-                            log::warn!("[WorkerRunner] simulate end");
-                            payload = vec![];
-                        }
-                        let (next, event) = llm_session.forward_req_next(step, payload);
+                        let (next, event) = llm_session.forward_req_next(step, payload, seq_len, index_pos);
                         if let Err(e) = self.network.send(next, &event) {
                             log::error!("[WorkerRunner] forward_req: next layer event error {e:?}");
                         }
@@ -214,6 +205,14 @@ impl WorkerRunner {
                             log::error!("[WorkerRunner] end_req: next layer event error {e:?}");
                         }
                     },
+                },
+                e = self.session_control_rx.recv() => match e {
+                    Some((session, req, tx)) => {
+                        self.on_local_session_req(session, req, tx)?;
+                    },
+                    None => {
+                        break None;
+                    }
                 }
             }
         }
@@ -221,7 +220,54 @@ impl WorkerRunner {
 }
 
 impl WorkerRunner {
-    fn on_remote_msg(&mut self, remote: NodeId, msg: protocol::worker::Event) -> Option<WorkerRunnerEvent> {
+    fn on_local_session_req(&mut self, session: Session, req: SessionReq, tx: oneshot::Sender<SessionRes>) -> Option<()> {
+        match req {
+            SessionReq::Start => {
+                let action = self.router.next_for(0)?;
+                log::info!("[WorkerRunner] select action {action:?} for session {session:?} with next layer is 0");
+                let mut llm_session = LlmSession::new(session, None, action);
+                llm_session.set_res_tx(tx);
+                if llm_session.is_local_process() {
+                    log::info!("[WorkerRunner] session {session:?} process start_req local");
+                    self.llm_req_tx.try_send(LlmReq::Start(session)).unwrap();
+                } else {
+                    log::info!("[WorkerRunner] session {session:?} don't process start_req local");
+                    let (next, event) = llm_session.start_req_next();
+                    self.network.send(next, &event).ok()?;
+                }
+                self.sessions.insert(session, llm_session);
+                Some(())
+            }
+            SessionReq::Forward(step, payload, seq_len, index_pos) => {
+                let llm_session = self.sessions.get_mut(&session)?;
+                llm_session.set_res_tx(tx);
+                if llm_session.is_local_process() {
+                    log::info!("[WorkerRunner] session {session:?} process forward_req local");
+                    self.llm_req_tx.try_send(LlmReq::Forward(session, step, payload, seq_len, index_pos)).unwrap();
+                } else {
+                    log::info!("[WorkerRunner] session {session:?} don't process forward_req local");
+                    let (next, event) = llm_session.forward_req_next(step, payload, seq_len, index_pos);
+                    self.network.send(next, &event).ok()?;
+                }
+                Some(())
+            }
+            SessionReq::Stop => {
+                let llm_session = self.sessions.get_mut(&session)?;
+                llm_session.set_res_tx(tx);
+                if llm_session.is_local_process() {
+                    log::info!("[WorkerRunner] session {session:?} process end_req local");
+                    self.llm_req_tx.try_send(LlmReq::End(session)).unwrap();
+                } else {
+                    log::info!("[WorkerRunner] session {session:?} don't process end_req local");
+                    let (next, event) = llm_session.end_req_next();
+                    self.network.send(next, &event).ok()?;
+                }
+                Some(())
+            }
+        }
+    }
+
+    fn on_remote_msg(&mut self, remote: NodeId, msg: protocol::worker::Event) -> Option<()> {
         match msg.event? {
             protocol::worker::event::Event::SyncReq(req) => todo!(),
             protocol::worker::event::Event::SyncRes(res) => todo!(),
@@ -244,8 +290,9 @@ impl WorkerRunner {
             protocol::worker::event::Event::StartRes(res) => {
                 let session = Session(res.session_id);
                 let llm_session = self.sessions.get_mut(&session)?;
-                if llm_session.is_first() {
-                    Some(WorkerRunnerEvent::Session(session, SessionRes::Started(remote)))
+                if let Some(tx) = llm_session.take_res_tx() {
+                    tx.send(SessionRes::Started(remote)).unwrap();
+                    None
                 } else {
                     let (next, event) = llm_session.start_res_next();
                     if let Err(e) = self.network.send(next.clone(), &event) {
@@ -258,9 +305,9 @@ impl WorkerRunner {
                 let session = Session(req.session_id);
                 let llm_session = self.sessions.get(&session)?;
                 if llm_session.is_local_process() {
-                    self.llm_req_tx.try_send(LlmReq::Forward(session, req.step, req.payload)).unwrap();
+                    self.llm_req_tx.try_send(LlmReq::Forward(session, req.step, req.payload, req.seq_len, req.index_pos)).unwrap();
                 } else {
-                    let (next, event) = llm_session.forward_req_next(req.step, req.payload);
+                    let (next, event) = llm_session.forward_req_next(req.step, req.payload, req.seq_len, req.index_pos);
                     if let Err(e) = self.network.send(next.clone(), &event) {
                         log::error!("[WorkerRunner] forward req to next {next:?} error {e:?}");
                     }
@@ -270,10 +317,11 @@ impl WorkerRunner {
             protocol::worker::event::Event::ForwardRes(res) => {
                 let session = Session(res.session_id);
                 let llm_session = self.sessions.get_mut(&session)?;
-                if llm_session.is_first() {
-                    Some(WorkerRunnerEvent::Session(session, SessionRes::Backward(res.step, res.payload)))
+                if let Some(tx) = llm_session.take_res_tx() {
+                    tx.send(SessionRes::Backward(res.step, res.payload, res.seq_len, res.index_pos)).unwrap();
+                    None
                 } else {
-                    let (next, event) = llm_session.forward_res_next(res.step, res.payload);
+                    let (next, event) = llm_session.forward_res_next(res.step, res.payload, res.seq_len, res.index_pos);
                     if let Err(e) = self.network.send(next.clone(), &event) {
                         log::error!("[WorkerRunner] forward res to pre {next:?} error {e:?}");
                     }
@@ -296,17 +344,16 @@ impl WorkerRunner {
             protocol::worker::event::Event::EndRes(res) => {
                 let session = Session(res.session_id);
                 let llm_session = self.sessions.get_mut(&session)?;
-                let out = if llm_session.is_first() {
-                    Some(WorkerRunnerEvent::Session(session, SessionRes::Stopped(remote)))
+                if let Some(tx) = llm_session.take_res_tx() {
+                    tx.send(SessionRes::Stopped(remote)).unwrap();
                 } else {
                     let (next, event) = llm_session.end_res_next();
                     if let Err(e) = self.network.send(next.clone(), &event) {
                         log::error!("[WorkerRunner] end res to pre {next:?} error {e:?}");
                     }
-                    None
                 };
                 self.sessions.remove(&session);
-                out
+                None
             }
         }
     }

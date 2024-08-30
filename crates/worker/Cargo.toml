@@ -5,7 +5,9 @@ edition = "2021"
 
 [dependencies]
 log = { workspace = true }
+async-trait = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
+candle-core = { workspace = true }
 models = { path = "../models", version = "0.1.0" }
 model-router = { path = "../model-router", version = "0.1.0" }
 protocol = { path = "../protocol", version = "0.1.0" }

@@ -94,6 +94,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-trait"
+version = "0.1.81"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e0c28dcc82d7c8ead5cb13beb15405b57b8546e93215673ff8ca0349a028107"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1421,8 +1432,11 @@ dependencies = [
 name = "layer-worker"
 version = "0.1.0"
 dependencies = [
+ "candle-core",
  "clap",
  "log",
+ "models",
+ "protocol",
  "tokio",
  "tracing-subscriber",
  "worker",
@@ -1597,6 +1611,7 @@ dependencies = [
 name = "models"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "bincode",
  "candle-core",
  "candle-flash-attn",
@@ -1821,8 +1836,10 @@ version = "0.1.0"
 name = "openai-server"
 version = "0.1.0"
 dependencies = [
+ "candle-core",
  "clap",
  "log",
+ "models",
  "protocol",
  "tokio",
  "tracing-subscriber",
@@ -2286,6 +2303,7 @@ checksum = "7a66a03ae7c801facd77a29370b4faec201768915ac14a721ba36f20bc9c209b"
 name = "registry"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "futures-util",
  "log",
  "network",
@@ -3470,6 +3488,8 @@ dependencies = [
 name = "worker"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "candle-core",
  "log",
  "model-router",
  "models",

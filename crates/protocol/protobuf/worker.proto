@@ -28,12 +28,16 @@ message Event {
         uint32 step = 2;
         uint32 from = 3;
         bytes payload = 4;
+        uint32 seq_len = 5;
+        uint32 index_pos = 6;
     }
 
     message ForwardRes {
         uint64 session_id = 1;
         uint32 step = 2;
         bytes payload = 3;
+        uint32 seq_len = 5;
+        uint32 index_pos = 6;
     }
 
     message EndReq {

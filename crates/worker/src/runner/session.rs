@@ -4,22 +4,37 @@ use protocol::{
     worker::event::{EndReq, EndRes, ForwardReq, ForwardRes, StartReq, StartRes},
     Session,
 };
+use tokio::sync::oneshot;
+
+use super::SessionRes;
 
 pub struct LlmSession {
     session: Session,
     pre: Option<NodeId>,
     action: RouteAction<NodeId>,
     inited: bool,
+    res_tx: Option<oneshot::Sender<SessionRes>>,
 }
 
 impl LlmSession {
     pub fn new(session: Session, pre: Option<NodeId>, action: RouteAction<NodeId>) -> Self {
         let inited = matches!(&action, RouteAction::LastProcess);
-        Self { session, pre, action, inited }
+        Self {
+            session,
+            pre,
+            action,
+            inited,
+            res_tx: None,
+        }
     }
 
-    pub fn is_first(&self) -> bool {
-        self.pre.is_none()
+    pub fn set_res_tx(&mut self, tx: oneshot::Sender<SessionRes>) {
+        assert_eq!(self.pre, None);
+        self.res_tx = Some(tx);
+    }
+
+    pub fn take_res_tx(&mut self) -> Option<oneshot::Sender<SessionRes>> {
+        self.res_tx.take()
     }
 
     pub fn is_local_process(&self) -> bool {
@@ -79,10 +94,10 @@ impl LlmSession {
         )
     }
 
-    pub fn forward_req_next(&self, step: u32, payload: Vec<u8>) -> (NodeId, protocol::worker::Event) {
+    pub fn forward_req_next(&self, step: u32, payload: Vec<u8>, seq_len: u32, index_pos: u32) -> (NodeId, protocol::worker::Event) {
         match &self.action {
             RouteAction::PassthroughTo { dest } => {
-                log::info!("[LlmSession] passthrough forward_req to next {dest:?}");
+                log::info!("[LlmSession] passthrough forward_req to next {dest:?}, payload {} bytes", payload.len());
                 (
                     dest.clone(),
                     protocol::worker::Event {
@@ -91,12 +106,14 @@ impl LlmSession {
                             step,
                             from: 0,
                             payload,
+                            seq_len,
+                            index_pos,
                         })),
                     },
                 )
             }
             RouteAction::ForwardTo { dest, from } => {
-                log::info!("[LlmSession] forward forward_req to next {dest:?}, from {from}");
+                log::info!("[LlmSession] forward forward_req to next {dest:?}, from {from}, payload {} bytes", payload.len());
                 (
                     dest.clone(),
                     protocol::worker::Event {
@@ -105,12 +122,14 @@ impl LlmSession {
                             step,
                             from: *from,
                             payload,
+                            seq_len,
+                            index_pos,
                         })),
                     },
                 )
             }
             RouteAction::LastProcess => {
-                log::info!("[LlmSession] answer forward_req to pre {:?}", self.pre);
+                log::info!("[LlmSession] answer forward_req to pre {:?}, payload {} bytes", self.pre, payload.len());
                 (
                     self.pre.clone().unwrap(), //TODO check if we dont have pre but in LastProcess (single node entire llm layers)
                     protocol::worker::Event {
@@ -118,6 +137,8 @@ impl LlmSession {
                             session_id: self.session.0,
                             step,
                             payload,
+                            seq_len,
+                            index_pos,
                         })),
                     },
                 )
@@ -125,7 +146,7 @@ impl LlmSession {
         }
     }
 
-    pub fn forward_res_next(&self, step: u32, payload: Vec<u8>) -> (NodeId, protocol::worker::Event) {
+    pub fn forward_res_next(&self, step: u32, payload: Vec<u8>, seq_len: u32, index_pos: u32) -> (NodeId, protocol::worker::Event) {
         log::info!("[LlmSession] backward forward_res to pre {:?}", self.pre);
         (
             self.pre.clone().unwrap(), //TODO check if we dont have pre but in LastProcess (single node entire llm layers)
@@ -134,6 +155,8 @@ impl LlmSession {
                     session_id: self.session.0,
                     step,
                     payload,
+                    seq_len,
+                    index_pos,
                 })),
             },
         )

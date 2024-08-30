@@ -2,7 +2,7 @@ use candle_core::{quantized::gguf_file, Device, Tensor};
 use models::{
     get_device,
     phi3::{model_path, Phi3LayersWorker, Phi3Model},
-    remote::{RpcRequest, RpcResponse},
+    remote::TensorBuf,
     ModelLayersWorker,
 };
 use protocol::{ModelLayersRanger, Session};
@@ -12,10 +12,10 @@ use tokio::time::Instant;
 async fn main() {
     let device = get_device(false).unwrap();
     let layers_worker = VirtualRemoteLayersWorker::new(&device).await;
-    let phi3 = Phi3Model::new(&device, layers_worker).await;
+    let phi3 = Phi3Model::new(device, layers_worker).await;
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     tokio::spawn(async move {
-        phi3.chat(Session::new(), &device, 299792458, 500, "Write function max(x1, x2) in Rust", tx).await.unwrap();
+        phi3.chat(Session::new(), 299792458, 500, "Write function max(x1, x2) in Rust", tx).await.unwrap();
     });
 
     let begin = Instant::now();
@@ -48,36 +48,37 @@ impl VirtualRemoteLayersWorker {
     }
 }
 
-impl ModelLayersWorker<(Tensor, usize)> for VirtualRemoteLayersWorker {
+#[async_trait::async_trait]
+impl ModelLayersWorker<(Tensor, u32)> for VirtualRemoteLayersWorker {
     fn layers(&self) -> ModelLayersRanger {
         self.layers_worker.layers()
     }
 
-    async fn forward(&self, session: Session, (tensor, seq_len): (Tensor, usize), index_pos: usize) -> candle_core::Result<(Tensor, usize)> {
-        let req = RpcRequest { tensor, seq_len, index_pos };
-        let buf: Vec<u8> = req.into();
+    async fn start(&self, session: protocol::Session) {
+        self.layers_worker.start(session).await;
+    }
 
+    async fn forward(&self, session: Session, step: u32, (tensor, seq_len): (Tensor, u32), index_pos: u32) -> candle_core::Result<(Tensor, u32)> {
+        let tensor_buf = TensorBuf::from(tensor).to_vec();
         // println!("convert req to buf {}", buf.len());
-
         //convert back to request
-        let req: RpcRequest = (buf, self.device.clone()).try_into()?;
+        let tensor = TensorBuf::try_from(tensor_buf).unwrap().to_tensor(&self.device)?;
 
         // println!("convert req from buf");
 
-        let (res_tensor, _) = self.layers_worker.forward(session, (req.tensor, req.seq_len), req.index_pos).await?;
+        let (res_tensor, _) = self.layers_worker.forward(session, step, (tensor, seq_len), index_pos).await?;
 
         //convert to bytes
-        let res = RpcResponse { tensor: res_tensor };
-        let buf: Vec<u8> = res.into();
+        let res_tensor_buf = TensorBuf::from(res_tensor).to_vec();
 
         // println!("convert res to buf {}", buf.len());
 
         //convert back to response
-        let res: RpcResponse = (buf, self.device.clone()).try_into()?;
+        let res_tensor = TensorBuf::try_from(res_tensor_buf).unwrap().to_tensor(&self.device)?;
 
         // println!("convert res from buf");
 
-        Ok((res.tensor, seq_len))
+        Ok((res_tensor, seq_len))
     }
 
     async fn finish(&self, session: Session) {

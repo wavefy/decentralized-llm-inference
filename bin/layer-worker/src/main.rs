@@ -1,4 +1,10 @@
+use candle_core::quantized::gguf_file;
 use clap::Parser;
+use models::{
+    get_device,
+    phi3::{self, Phi3LayersWorker},
+};
+use protocol::{ModelLayersRanger, Session};
 use tokio::signal;
 use worker::WorkerRunner;
 
@@ -39,7 +45,12 @@ async fn main() {
 
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
 
-    let mut worker = WorkerRunner::new(&args.registry_server, &args.model, &args.node_id, args.layers_from, args.layers_to, 32).await;
+    let device = get_device(false).unwrap();
+    let mut model_file = std::fs::File::open(phi3::model_path().await).unwrap();
+    let model = gguf_file::Content::read(&mut model_file).unwrap();
+    let layers_worker = Phi3LayersWorker::new(false, ModelLayersRanger::new(args.layers_from, args.layers_to), &model, &mut model_file, &device).unwrap();
+
+    let (mut worker, _virtual_model_layer) = WorkerRunner::new(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to, 32).await;
     loop {
         tokio::select! {
             e = worker.recv() => match e {

@@ -78,23 +78,30 @@ impl Phi3LayersWorker {
     }
 }
 
-impl ModelLayersWorker<(Tensor, usize)> for Phi3LayersWorker {
+#[async_trait::async_trait]
+impl ModelLayersWorker<(Tensor, u32)> for Phi3LayersWorker {
     fn layers(&self) -> ModelLayersRanger {
         self.range
     }
 
-    async fn forward(&self, session: Session, (mut xs, seq_len): (Tensor, usize), index_pos: usize) -> Result<(Tensor, usize)> {
+    async fn start(&self, session: Session) {
+        for (idx, _) in self.layers.iter().enumerate() {
+            self.caches.add_cache(idx, session);
+        }
+    }
+
+    async fn forward(&self, session: Session, _step: u32, (mut xs, seq_len): (Tensor, u32), index_pos: u32) -> Result<(Tensor, u32)> {
         let _span = self.span.enter();
         let mask = if seq_len == 1 {
             None
         } else {
-            Some(self.mask(seq_len, xs.device())?)
+            Some(self.mask(seq_len as usize, xs.device())?)
         };
         for (idx, layer) in self.layers.iter().enumerate() {
             let residual = &xs;
             let ys = xs.apply(&layer.attn_norm)?;
             let kv_cache = self.caches.get_cache(idx, session);
-            let ys = layer.forward_attn(&ys, mask.as_ref(), index_pos, &mut kv_cache.lock())?;
+            let ys = layer.forward_attn(&ys, mask.as_ref(), index_pos as usize, &mut kv_cache.lock())?;
             let ys = (ys + residual)?;
             let residual = &ys;
             let ys = ys.apply(&layer.ffn_norm)?;
@@ -106,7 +113,7 @@ impl ModelLayersWorker<(Tensor, usize)> for Phi3LayersWorker {
 
     async fn finish(&self, session: Session) {
         for (idx, _) in self.layers.iter().enumerate() {
-            self.caches.rm_cache(idx, session);
+            self.caches.del_cache(idx, session);
         }
     }
 }

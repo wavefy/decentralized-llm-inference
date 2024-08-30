@@ -6,7 +6,12 @@ edition = "2021"
 [dependencies]
 log = { workspace = true }
 clap = { workspace = true }
+candle-core = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 worker = { path = "../../crates/worker", version = "0.1.0" }
 protocol = { path = "../../crates/protocol", version = "0.1.0" }
+models = { path = "../../crates/models", version = "0.1.0" }
+
+[features]
+metal = ["models/metal"]

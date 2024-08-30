@@ -41,21 +41,23 @@ pub async fn model_path() -> PathBuf {
     repo.get("Phi-3-mini-4k-instruct-q4.gguf").await.unwrap()
 }
 
-pub struct Phi3Model<W: ModelLayersWorker<(Tensor, usize)>> {
+pub struct Phi3Model<W: ModelLayersWorker<(Tensor, u32)>> {
+    device: Device,
     tokenizer: Tokenizer,
     preprocessor: Phi3Preprocessor,
     layers_worker: W,
     postprocessor: Phi3Postprocessor,
 }
 
-impl<W: ModelLayersWorker<(Tensor, usize)>> Phi3Model<W> {
-    pub async fn new(device: &Device, layers_worker: W) -> Self {
+impl<W: ModelLayersWorker<(Tensor, u32)>> Phi3Model<W> {
+    pub async fn new(device: Device, layers_worker: W) -> Self {
         let tokenizer = Tokenizer::from_file(tokenizer_path().await).unwrap();
         let mut model_file = std::fs::File::open(model_path().await).unwrap();
         let model = gguf_file::Content::read(&mut model_file).unwrap();
-        let preprocessor = Phi3Preprocessor::new(&model, &mut model_file, device).unwrap();
-        let postprocessor = Phi3Postprocessor::new(&model, &mut model_file, device).unwrap();
+        let preprocessor = Phi3Preprocessor::new(&model, &mut model_file, &device).unwrap();
+        let postprocessor = Phi3Postprocessor::new(&model, &mut model_file, &device).unwrap();
         Self {
+            device,
             tokenizer,
             preprocessor,
             layers_worker,
@@ -63,18 +65,20 @@ impl<W: ModelLayersWorker<(Tensor, usize)>> Phi3Model<W> {
         }
     }
 
-    pub async fn chat(&self, session: Session, device: &Device, seed: u64, max_len: usize, prompt: &str, tx: Sender<String>) -> Result<()> {
+    pub async fn chat(&self, session: Session, seed: u64, max_len: u32, prompt: &str, tx: Sender<String>) -> Result<()> {
         let mut tos = TokenOutputStream::new(self.tokenizer.clone());
         let tokens = tos.tokenizer().encode(prompt, true).unwrap();
         let mut all_tokens = vec![];
         let mut logits_processor = LogitsProcessor::from_sampling(seed, Sampling::ArgMax);
         let tokens = tokens.get_ids();
 
+        self.layers_worker.start(session).await;
+
         // for first cycle, process input prompt
         let mut next_token = {
-            let input = Tensor::new(tokens, &device)?.unsqueeze(0)?;
+            let input = Tensor::new(tokens, &self.device)?.unsqueeze(0)?;
             let step1 = self.preprocessor.forward(session, input).await?;
-            let step2 = self.layers_worker.forward(session, step1, 0).await?;
+            let step2 = self.layers_worker.forward(session, 0, step1, 0).await?;
             let logits = self.postprocessor.forward(session, step2).await?;
             let logits = logits.squeeze(0)?;
             logits_processor.sample(&logits)?
@@ -87,9 +91,9 @@ impl<W: ModelLayersWorker<(Tensor, usize)>> Phi3Model<W> {
         let eos_token = *tos.tokenizer().get_vocab(true).get("<|endoftext|>").unwrap();
 
         for index in 0..max_len {
-            let input = Tensor::new(&[next_token], &device)?.unsqueeze(0)?;
+            let input = Tensor::new(&[next_token], &self.device)?.unsqueeze(0)?;
             let step1 = self.preprocessor.forward(session, input).await?;
-            let step2 = self.layers_worker.forward(session, step1, tokens.len() + index).await?;
+            let step2 = self.layers_worker.forward(session, index as u32 + 1, step1, tokens.len() as u32 + index).await?;
             let logits = self.postprocessor.forward(session, step2).await?;
             let logits = logits.squeeze(0)?;
             next_token = logits_processor.sample(&logits)?;

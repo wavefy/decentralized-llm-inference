@@ -20,17 +20,15 @@ impl LayersCache {
         Self { layers_cache, dim, max_seq_len }
     }
 
-    pub fn get_cache(&self, idx: usize, session: Session) -> Arc<Mutex<KvCache>> {
-        let slot = &self.layers_cache[idx];
-
-        if !slot.read().contains_key(&session) {
-            slot.write().insert(session, Arc::new(Mutex::new(KvCache::new(self.dim, self.max_seq_len))));
-        }
-
-        slot.read().get(&session).unwrap().clone()
+    pub fn add_cache(&self, idx: usize, session: Session) {
+        self.layers_cache[idx].write().insert(session, Arc::new(Mutex::new(KvCache::new(self.dim, self.max_seq_len))));
     }
 
-    pub fn rm_cache(&self, idx: usize, session: Session) {
+    pub fn get_cache(&self, idx: usize, session: Session) -> Arc<Mutex<KvCache>> {
+        self.layers_cache[idx].read().get(&session).unwrap().clone()
+    }
+
+    pub fn del_cache(&self, idx: usize, session: Session) {
         self.layers_cache[idx].write().remove(&session);
     }
 }

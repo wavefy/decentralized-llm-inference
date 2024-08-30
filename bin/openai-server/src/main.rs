@@ -1,14 +1,19 @@
-use std::{collections::HashMap, net::SocketAddr};
+use std::{net::SocketAddr, sync::Arc};
 
+use candle_core::quantized::gguf_file;
 use clap::Parser;
-use protocol::Session;
+use models::{
+    get_device,
+    phi3::{self, Phi3LayersWorker, Phi3Model},
+};
+use protocol::{ModelLayersRanger, Session};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     signal,
-    sync::mpsc::{channel, Sender},
+    sync::mpsc::channel,
 };
-use worker::{SessionReq, SessionRes, WorkerRunner};
+use worker::{VirtualModelLayers, WorkerRunner};
 
 /// OpenAI Server for decentralized LLM
 #[derive(Parser, Debug)]
@@ -51,43 +56,29 @@ async fn main() {
 
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
 
+    let device = get_device(false).unwrap();
+    let mut model_file = std::fs::File::open(phi3::model_path().await).unwrap();
+    let model = gguf_file::Content::read(&mut model_file).unwrap();
+    let layers_worker = Phi3LayersWorker::new(false, ModelLayersRanger::new(args.layers_from, args.layers_to), &model, &mut model_file, &device).unwrap();
+
+    let (mut worker, virtual_model_layers) = WorkerRunner::new(&args.registry_server, device.clone(), layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to, 32).await;
+
     let tcp_listener = TcpListener::bind(args.http_bind).await.expect("Should open tcp port");
-    let (control_tx, mut control_rx) = channel(10);
-    let mut worker = WorkerRunner::new(&args.registry_server, &args.model, &args.node_id, args.layers_from, args.layers_to, 32).await;
-    let mut sessions = HashMap::new();
+    let phi3 = Arc::new(Phi3Model::new(device, virtual_model_layers).await);
 
     loop {
         tokio::select! {
             e = tcp_listener.accept() => match e {
                 Ok((stream, remote)) => {
-                    let (session, tx) = spawn_session(stream, remote, control_tx.clone());
-                    sessions.insert(session, tx);
+                    spawn_session(stream, remote, phi3.clone());
                 },
                 Err(err) => {
                     log::error!("[OpenAIServer] tcp listener error {err:?}");
                     break;
                 }
             },
-            e = control_rx.recv() => match e {
-                Some((session, Some(req))) => {
-                    worker.session_req(session, req);
-                },
-                Some((session, None)) => {
-                    sessions.remove(&session);
-                },
-                None => {
-                    log::error!("[OpenAIServer] control_rx closed");
-                    break;
-                },
-            },
             e = worker.recv() => match e {
-                Some(e) => match e {
-                    worker::WorkerRunnerEvent::Session(session, res) => {
-                        if let Some(tx) = sessions.get(&session) {
-                            tx.send(res).await.unwrap();
-                        }
-                    },
-                },
+                Some(e) => {},
                 None => {
                     log::error!("[OpenAIServer] worker closed");
                     break;
@@ -101,58 +92,20 @@ async fn main() {
     }
 }
 
-fn spawn_session(mut stream: TcpStream, remote: SocketAddr, control_tx: Sender<(Session, Option<SessionReq>)>) -> (Session, Sender<SessionRes>) {
+fn spawn_session(mut stream: TcpStream, remote: SocketAddr, phi3: Arc<Phi3Model<VirtualModelLayers>>) {
     let session = Session::new();
-    let (tx, mut rx) = channel(10);
     tokio::spawn(async move {
         log::info!("[OpenAIServer] session {session:?} connected with remote {remote:?}");
-        control_tx.send((session, Some(SessionReq::Start))).await.unwrap();
-        stream.write_all("Connecting\n".as_bytes()).await.unwrap();
-
         let mut buf = [0; 4096];
-        let mut started = false;
-        loop {
-            tokio::select! {
-                e = rx.recv() => match e {
-                    Some(res) => match res {
-                        SessionRes::Started(next) => {
-                            log::info!("[OpenAiServer] session started {session:?}");
-                            started = true;
-                            stream.write_all("Connected\n".as_bytes()).await.unwrap();
-                        }
-                        SessionRes::Backward(step, payload) => {
-                            if payload.is_empty() {
-                                control_tx.send((session, Some(SessionReq::Stop))).await.unwrap();
-                            } else {
-                                stream.write_all(&payload).await.unwrap();
-                                control_tx.send((session, Some(SessionReq::Forward(step + 1, payload)))).await.unwrap();
-                            }
-                        }
-                        SessionRes::Stopped(next) => {
-                            log::info!("[OpenAiServer] session stopped {session:?}");
-                            break;
-                        },
-                    },
-                    None => break,
-                },
-                e = stream.read(&mut buf) => match e {
-                    Ok(0) => {
-                        break;
-                    },
-                    Ok(len) => {
-                        log::info!("[OpenAiServer] session received {len} bytes from client");
-                        if !started {
-                            stream.write_all("Connecting...\n".as_bytes()).await.unwrap();
-                        } else {
-                            control_tx.send((session, Some(SessionReq::Forward(0, buf[..len].to_vec())))).await.unwrap();
-                        }
-                    },
-                    Err(e) => break,
-                }
+        if let Ok(len) = stream.read(&mut buf).await {
+            let prompt = String::from_utf8_lossy(&buf[0..len]).to_string();
+            let (tx, mut rx) = channel(1);
+            tokio::spawn(async move { phi3.chat(session, 0, 1024, &prompt, tx).await });
+
+            while let Some(out) = rx.recv().await {
+                stream.write_all(out.as_bytes()).await.unwrap();
             }
         }
         log::info!("[OpenAIServer] end session {session:?} with remote {remote:?}");
-        control_tx.send((session, None)).await.unwrap();
     });
-    (session, tx)
 }
