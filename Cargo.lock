@@ -1617,6 +1617,7 @@ dependencies = [
  "candle-flash-attn",
  "candle-nn",
  "hf-hub",
+ "log",
  "protocol",
  "rand",
  "serde",

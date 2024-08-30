@@ -76,12 +76,16 @@ impl<W: ModelLayersWorker<(Tensor, u32)>> Phi3Model<W> {
 
         // for first cycle, process input prompt
         let mut next_token = {
-            let input = Tensor::new(tokens, &self.device)?.unsqueeze(0)?;
-            let step1 = self.preprocessor.forward(session, input).await?;
-            let step2 = self.layers_worker.forward(session, 0, step1, 0).await?;
-            let logits = self.postprocessor.forward(session, step2).await?;
-            let logits = logits.squeeze(0)?;
-            logits_processor.sample(&logits)?
+            let mut next_token = 0;
+            for (pos, token) in tokens.iter().enumerate() {
+                let input = Tensor::new(&[*token], &self.device)?.unsqueeze(0)?;
+                let step1 = self.preprocessor.forward(session, input).await?;
+                let step2 = self.layers_worker.forward(session, 0, step1, pos as u32).await?;
+                let logits = self.postprocessor.forward(session, step2).await?;
+                let logits = logits.squeeze(0)?;
+                next_token = logits_processor.sample(&logits)?
+            }
+            next_token
         };
 
         all_tokens.push(next_token);
