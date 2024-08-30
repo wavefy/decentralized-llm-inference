@@ -9,6 +9,7 @@ tokio = { workspace = true, features = ["sync"] }
 str0m = "0.6"
 log = { workspace = true }
 rand = { workspace = true }
+prost = { workspace = true }
 
 [features]
 default = ["full"]

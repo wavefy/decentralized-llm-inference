@@ -14,7 +14,7 @@ use tokio_tungstenite::connect_async;
 
 mod protobuf_stream;
 
-use crate::{AnswerError, OfferError};
+use crate::AnswerError;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RegistryClientEvent {

@@ -3,10 +3,12 @@ resolver = "2"
 members = [
     "bin/desktop-app",
     "bin/openai-server",
+    "bin/layer-worker",
     "bin/registry-server",
     "crates/model-router",
     "crates/models",
     "crates/network",
+    "crates/openai-protocol",
     "crates/protocol",
     "crates/registry",
     "crates/worker"

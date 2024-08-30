@@ -11,6 +11,7 @@ use crate::addr::NodeId;
 pub enum RemoteConnOut {
     Transmit(SocketAddr, SocketAddr, Vec<u8>),
     Connected,
+    Message(Vec<u8>),
     Disconnected,
 }
 
@@ -82,6 +83,11 @@ impl RemoteConn {
         false
     }
 
+    pub fn send_data(&mut self, buf: &[u8]) -> Option<usize> {
+        let channel = self.channel?;
+        self.rtc.channel(channel)?.write(true, buf).ok()
+    }
+
     pub fn on_data(&mut self, now: Instant, from: SocketAddr, to: SocketAddr, buf: &[u8]) -> Option<()> {
         log::debug!("[RemoteConn {:?}] recv {} bytes from {}", self.remote, buf.len(), from);
         self.rtc.handle_input(Input::Receive(now, Receive::new(Protocol::Udp, from, to, buf).ok()?)).ok()
@@ -131,6 +137,7 @@ impl RemoteConn {
                         }
                         str0m::Event::ChannelData(data) => {
                             log::info!("[RemoteConn {:?}] on channel data {}", self.remote, data.data.len());
+                            self.queue.push_back(RemoteConnOut::Message(data.data));
                         }
                         str0m::Event::ChannelClose(_) => {
                             log::info!("[RemoteConn {:?}] closed channel", self.remote);

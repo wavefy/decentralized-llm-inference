@@ -1418,6 +1418,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "layer-worker"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "log",
+ "tokio",
+ "tracing-subscriber",
+ "worker",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1650,6 +1661,7 @@ name = "network"
 version = "0.1.0"
 dependencies = [
  "log",
+ "prost",
  "protocol",
  "rand",
  "str0m",
@@ -1802,11 +1814,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "openai-protocol"
+version = "0.1.0"
+
+[[package]]
 name = "openai-server"
 version = "0.1.0"
 dependencies = [
  "clap",
  "log",
+ "protocol",
  "tokio",
  "tracing-subscriber",
  "worker",
@@ -3454,6 +3471,7 @@ name = "worker"
 version = "0.1.0"
 dependencies = [
  "log",
+ "model-router",
  "models",
  "network",
  "protocol",

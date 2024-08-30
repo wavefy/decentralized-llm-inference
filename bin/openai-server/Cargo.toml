@@ -8,4 +8,5 @@ log = { workspace = true }
 clap = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-worker = { path = "../../crates/worker" }
+worker = { path = "../../crates/worker", version = "0.1.0" }
+protocol = { path = "../../crates/protocol", version = "0.1.0" }

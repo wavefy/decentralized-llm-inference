@@ -35,12 +35,11 @@ pub enum IncomingError {
     AlreadyHas,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
-pub struct MsgId(u64);
-
 #[derive(Debug, PartialEq, Eq)]
 pub enum MsgError {
+    NoNode,
     NoConnection,
+    ConnectionNotReady,
     Timeout,
 }
 
@@ -48,81 +47,97 @@ pub struct ConnectionStats {
     pub rtt: u16,
 }
 
-pub enum NodeEvent {
+pub enum NodeEvent<MSG> {
     NodeConnected(ConnId, NodeId),
     NodeStats(ConnId, NodeId, ConnectionStats),
-    NodeMsg(ConnId, NodeId, Vec<u8>),
+    NodeMsg(ConnId, NodeId, MSG),
     NodeDisconnected(ConnId, NodeId),
 }
 
-pub struct NetworkNode {
+pub struct NetworkNode<MSG> {
     node: NodeId,
     udp: UdpSocket,
     udp_buf: Vec<u8>,
-    remotes: HashMap<ConnId, RemoteConn>,
-    events: VecDeque<NodeEvent>,
+    conns: HashMap<ConnId, RemoteConn>,
+    nodes: HashMap<NodeId, ConnId>,
+    events: VecDeque<NodeEvent<MSG>>,
     shared_udp: SharedUdpPort<ConnId>,
     interval: Interval,
 }
 
-impl NetworkNode {
+impl<MSG: prost::Message + Default> NetworkNode<MSG> {
     pub async fn new(node: NodeId) -> Self {
         let udp = UdpSocket::bind("127.0.0.1:0").await.expect("Should listen");
         Self {
             node,
             udp,
             udp_buf: vec![0; 1500],
-            remotes: HashMap::new(),
+            nodes: HashMap::new(),
+            conns: HashMap::new(),
             events: VecDeque::new(),
             shared_udp: SharedUdpPort::default(),
             interval: tokio::time::interval(Duration::from_millis(1)),
         }
     }
 
-    async fn tick(&mut self) {
+    fn tick(&mut self) {
         let now = Instant::now();
-        for (conn_id, conn) in self.remotes.iter_mut() {
+        for (conn_id, conn) in self.conns.iter_mut() {
             if conn.on_tick(now) {
-                Self::pop_conn(conn_id, conn, &self.udp, &mut self.events, &mut self.shared_udp).await;
+                Self::pop_conn(conn_id, conn, &self.udp, &mut self.events, &mut self.shared_udp);
             }
         }
     }
 
-    pub fn send(&mut self, dest: NodeId, data: Vec<u8>) -> Result<MsgId, MsgError> {
-        todo!()
+    pub fn send(&mut self, node: NodeId, data: &MSG) -> Result<usize, MsgError> {
+        let buf = data.encode_to_vec();
+        let conn_id = self.nodes.get(&node).ok_or(MsgError::NoNode)?;
+        let conn = self.conns.get_mut(conn_id).ok_or(MsgError::NoConnection)?;
+        let appended = conn.send_data(&buf).ok_or(MsgError::ConnectionNotReady)?;
+        assert_eq!(buf.len(), appended, "Should send all buffer");
+
+        Self::pop_conn(conn_id, conn, &self.udp, &mut self.events, &mut self.shared_udp);
+
+        Ok(appended)
     }
 
     pub fn connect(&mut self, dest: NodeId) -> Option<(ConnId, String)> {
-        //TODO check if node already connected
-        let conn_id = ConnId::rand();
+        if !self.nodes.contains_key(&dest) {
+            let conn_id = ConnId::rand();
+            self.nodes.insert(dest.clone(), conn_id);
 
-        let (mut conn, ice_ufrag) = RemoteConn::new(dest, vec![self.udp.local_addr().expect("Should have local")]);
-        self.shared_udp.add_ufrag(ice_ufrag, conn_id);
-        let offer = conn.create_offer();
-        self.remotes.insert(conn_id, conn);
+            let (mut conn, ice_ufrag) = RemoteConn::new(dest, vec![self.udp.local_addr().expect("Should have local")]);
+            self.shared_udp.add_ufrag(ice_ufrag, conn_id);
+            let offer = conn.create_offer();
+            Self::pop_conn(&conn_id, &mut conn, &self.udp, &mut self.events, &mut self.shared_udp);
+            self.conns.insert(conn_id, conn);
 
-        Some((conn_id, offer))
+            Some((conn_id, offer))
+        } else {
+            None
+        }
     }
 
-    pub async fn on_offer(&mut self, conn_id: ConnId, from: NodeId, offer: &str) -> Result<String, IncomingError> {
-        if self.remotes.contains_key(&conn_id) {
+    pub fn on_offer(&mut self, conn_id: ConnId, from: NodeId, offer: &str) -> Result<String, IncomingError> {
+        if self.conns.contains_key(&conn_id) {
             Err(IncomingError::AlreadyHas)
         } else {
-            let (mut conn, ice_ufrag) = RemoteConn::new(from, vec![self.udp.local_addr().expect("Should have local")]);
+            let (mut conn, ice_ufrag) = RemoteConn::new(from.clone(), vec![self.udp.local_addr().expect("Should have local")]);
             self.shared_udp.add_ufrag(ice_ufrag, conn_id);
             let answer = conn.accept_offer(offer).ok_or(IncomingError::SdpError)?;
-            Self::pop_conn(&conn_id, &mut conn, &self.udp, &mut self.events, &mut self.shared_udp).await;
-            self.remotes.insert(conn_id, conn);
+            Self::pop_conn(&conn_id, &mut conn, &self.udp, &mut self.events, &mut self.shared_udp);
+            self.conns.insert(conn_id, conn);
+            self.nodes.insert(from, conn_id);
             Ok(answer)
         }
     }
 
-    pub async fn on_answer(&mut self, conn: ConnId, from: NodeId, answer: String) -> Result<(), IncomingError> {
-        let remote = self.remotes.get_mut(&conn).ok_or(IncomingError::RemoteNotFound)?;
+    pub fn on_answer(&mut self, conn: ConnId, from: NodeId, answer: String) -> Result<(), IncomingError> {
+        let remote = self.conns.get_mut(&conn).ok_or(IncomingError::RemoteNotFound)?;
 
         if remote.remote() == from {
             remote.on_answer(&answer).ok_or(IncomingError::SdpError)?;
-            Self::pop_conn(&conn, remote, &self.udp, &mut self.events, &mut self.shared_udp).await;
+            Self::pop_conn(&conn, remote, &self.udp, &mut self.events, &mut self.shared_udp);
             Ok(())
         } else {
             Err(IncomingError::RemoteNotFound)
@@ -130,9 +145,9 @@ impl NetworkNode {
     }
 
     pub async fn shutdown(&mut self) {
-        for (conn_id, conn) in self.remotes.iter_mut() {
+        for (conn_id, conn) in self.conns.iter_mut() {
             conn.shutdown();
-            Self::pop_conn(conn_id, conn, &self.udp, &mut self.events, &mut self.shared_udp).await;
+            Self::pop_conn(conn_id, conn, &self.udp, &mut self.events, &mut self.shared_udp);
         }
         loop {
             tokio::select! {
@@ -148,23 +163,27 @@ impl NetworkNode {
         }
     }
 
-    pub async fn recv(&mut self) -> Option<NodeEvent> {
+    pub async fn recv(&mut self) -> Option<NodeEvent<MSG>> {
         loop {
             if let Some(out) = self.events.pop_front() {
+                if let NodeEvent::NodeDisconnected(conn_id, node) = &out {
+                    self.conns.remove(conn_id);
+                    self.nodes.remove(node);
+                }
                 return Some(out);
             }
 
             tokio::select! {
                 _ = self.interval.tick() => {
-                    self.tick().await;
+                    self.tick();
                 },
                 net_in = self.udp.recv_from(&mut self.udp_buf) => {
                     if let Ok((len, remote)) = net_in {
                         log::debug!("[NetworkNode] recv {len} bytes from {remote}");
                         if let Some(conn_id) = self.shared_udp.map_remote(remote, &self.udp_buf[0..len]) {
-                            if let Some(conn) = self.remotes.get_mut(&conn_id) {
+                            if let Some(conn) = self.conns.get_mut(&conn_id) {
                                 conn.on_data(Instant::now(), remote, self.udp.local_addr().unwrap(), &self.udp_buf[0..len]);
-                                Self::pop_conn(&conn_id, conn, &self.udp, &mut self.events, &mut self.shared_udp).await;
+                                Self::pop_conn(&conn_id, conn, &self.udp, &mut self.events, &mut self.shared_udp);
                             } else {
                                 log::info!("[NetworkNode] connection {conn_id:?} not found");
                             }
@@ -179,18 +198,29 @@ impl NetworkNode {
         }
     }
 
-    async fn pop_conn(conn_id: &ConnId, conn: &mut RemoteConn, udp: &UdpSocket, events: &mut VecDeque<NodeEvent>, shared_udp: &mut SharedUdpPort<ConnId>) {
+    fn pop_conn(conn_id: &ConnId, conn: &mut RemoteConn, udp: &UdpSocket, events: &mut VecDeque<NodeEvent<MSG>>, shared_udp: &mut SharedUdpPort<ConnId>) {
         while let Some(event) = conn.pop_outgoing() {
             match event {
                 remote_conn::RemoteConnOut::Transmit(from, to, buf) => {
                     log::debug!("[NetworkNode] conn {conn_id:?} send {from} => {to} with len {}", buf.len());
-                    if let Err(e) = udp.send_to(&buf, to).await {
+                    if let Err(e) = udp.try_send_to(&buf, to) {
                         log::error!("[NetworkNode] send data to {to} error {e:?}");
                     }
                 }
                 remote_conn::RemoteConnOut::Connected => {
                     log::info!("[NetworkNode] conn {conn_id:?} connected");
                     events.push_back(NodeEvent::NodeConnected(*conn_id, conn.remote()));
+                }
+                remote_conn::RemoteConnOut::Message(data) => {
+                    log::debug!("[NetworkNode] conn {conn_id:?} on data {}", data.len());
+                    match MSG::decode(data.as_slice()) {
+                        Ok(msg) => {
+                            events.push_back(NodeEvent::NodeMsg(*conn_id, conn.remote(), msg));
+                        }
+                        Err(e) => {
+                            log::error!("[NetworkNode] decode message error {e:?}");
+                        }
+                    }
                 }
                 remote_conn::RemoteConnOut::Disconnected => {
                     log::info!("[NetworkNode] conn {conn_id:?} disconnected");

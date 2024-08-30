@@ -5,39 +5,53 @@ syntax = "proto3";
 
 package worker;
 
-message BeginRequest {
-    uint64 session = 1;
-    uint32 max_time_seconds = 2;
-    uint32 from_layer = 3;
-    uint32 to_layer = 4;
-    string next_addr = 5;
-}
+message Event {
+    message SyncReq {
 
-message BeginReply {
+    }
 
-}
+    message SyncRes {
 
-message ForwardRequest {
-    uint64 session = 1;
-    // tensor buffer
-    // index_pos
-}
+    }
 
-message ForwardReply {
-    // tensor buffer
-}
+    message StartReq {
+        uint64 session_id = 1;
+        uint32 from = 2;
+    }
 
-message FinishRequest {
-    uint64 session = 1;
-}
+    message StartRes {
+        uint64 session_id = 1;
+    }
 
-message FinishReply {
+    message ForwardReq {
+        uint64 session_id = 1;
+        uint32 step = 2;
+        uint32 from = 3;
+        bytes payload = 4;
+    }
 
-}
+    message ForwardRes {
+        uint64 session_id = 1;
+        uint32 step = 2;
+        bytes payload = 3;
+    }
 
-service WorkerHandler {
-    // Use for booking slot in worker
-    rpc begin(BeginRequest) returns (BeginReply) {}
-    rpc forward(ForwardRequest) returns (ForwardReply) {}
-    rpc finish(FinishRequest) returns (FinishReply) {}
+    message EndReq {
+        uint64 session_id = 1;
+    }
+
+    message EndRes {
+        uint64 session_id = 1;
+    }
+
+    oneof event {
+        SyncReq sync_req = 1;
+        SyncRes sync_res = 2;
+        StartReq start_req = 3;
+        StartRes start_res = 4;
+        ForwardReq forward_req = 5;
+        ForwardRes forward_res = 6;
+        EndReq end_req = 7;
+        EndRes end_res = 8;
+    }
 }
