@@ -2,7 +2,7 @@ use candle_core::utils::{cuda_is_available, metal_is_available};
 use candle_core::{Device, Result};
 use protocol::{ModelLayersRanger, Session};
 
-mod layers_cache;
+pub mod llama;
 mod logits_processor;
 pub mod phi3;
 mod quantized_var_builder;

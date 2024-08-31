@@ -19,6 +19,7 @@ use crate::{
 };
 
 mod internal;
+mod layers_cache;
 mod layers_worker;
 mod postprocessing;
 mod preprocessing;

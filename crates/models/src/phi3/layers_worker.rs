@@ -1,9 +1,10 @@
 use candle_core::{quantized::gguf_file, DType, Device, Result, Tensor};
 use candle_nn::Module;
 
-use crate::{layers_cache::LayersCache, ModelLayersRanger, ModelLayersWorker, Session};
+use crate::{ModelLayersRanger, ModelLayersWorker, Session};
 
 use super::internal::{layer_weights::LayerWeights, mlp::Mlp, qlinear::QLinear};
+use super::layers_cache::LayersCache;
 use super::rms_norm;
 
 pub struct Phi3LayersWorker {
