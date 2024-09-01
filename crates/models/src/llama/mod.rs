@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use candle_core::{DType, Device, Result, Tensor};
 use candle_nn::VarBuilder;
 use hf_hub::{api::tokio::Api, Repo, RepoType};
-use internal::{Config, LlamaConfig, LlamaEosToks};
+use internal::{Config, LlamaConfig, LlamaEosToks, LlamaPost, LlamaPre};
 use protocol::{ModelLayersRanger, Session};
 use tokenizers::Tokenizer;
 use tokio::sync::mpsc::Sender;
@@ -20,60 +20,38 @@ use crate::{
     logits_processor::{LogitsProcessor, Sampling},
     token_output_stream::TokenOutputStream,
     utils::{apply_repeat_penalty, hub_load_safetensors},
-    ModelLayersWorker,
+    ChatCfg, ChatModel, ModelLayersWorker,
 };
 
 async fn tokenizer_path() -> PathBuf {
     let api = Api::new().unwrap();
-    let repo = api.repo(Repo::with_revision("meta-llama/Meta-Llama-3.1-8B-Instruct".to_string(), RepoType::Model, "main".to_string()));
+    let repo = api.repo(Repo::with_revision("nvidia/Llama-3.1-Minitron-4B-Depth-Base".to_string(), RepoType::Model, "main".to_string()));
     repo.get("tokenizer.json").await.unwrap()
 }
 
 async fn config_path() -> PathBuf {
     let api = Api::new().unwrap();
-    let repo = api.repo(Repo::with_revision("meta-llama/Meta-Llama-3.1-8B-Instruct".to_string(), RepoType::Model, "main".to_string()));
+    let repo = api.repo(Repo::with_revision("nvidia/Llama-3.1-Minitron-4B-Depth-Base".to_string(), RepoType::Model, "main".to_string()));
     repo.get("config.json").await.unwrap()
 }
 
 pub async fn model_filenames() -> Vec<PathBuf> {
     let api = Api::new().unwrap();
-    let repo = api.repo(Repo::with_revision("meta-llama/Meta-Llama-3.1-8B-Instruct".to_string(), RepoType::Model, "main".to_string()));
+    let repo = api.repo(Repo::with_revision("nvidia/Llama-3.1-Minitron-4B-Depth-Base".to_string(), RepoType::Model, "main".to_string()));
     hub_load_safetensors(&repo, "model.safetensors.index.json").await.unwrap()
-}
-
-pub struct ChatCfg {
-    pub seed: u64,
-    pub temperature: f64,
-    pub top_k: Option<usize>,
-    pub top_p: Option<f64>,
-    pub max_len: u32,
-    pub repeat_penalty: f32,
-    pub repeat_last_n: usize,
-}
-
-impl Default for ChatCfg {
-    fn default() -> Self {
-        Self {
-            seed: 1234,
-            temperature: 0.8,
-            top_k: None,
-            top_p: None,
-            max_len: 1024,
-            repeat_penalty: 1.1,
-            repeat_last_n: 128,
-        }
-    }
 }
 
 pub struct LlamaModel<W: ModelLayersWorker<(Tensor, u32)>> {
     device: Device,
     tokenizer: Tokenizer,
+    pre: LlamaPre,
+    post: LlamaPost,
     layers_worker: W,
     config: Config,
 }
 
 impl<W: ModelLayersWorker<(Tensor, u32)>> LlamaModel<W> {
-    pub async fn new(device: Device, layers_worker: W, use_flash_attn: bool) -> Self {
+    pub async fn new(device: Device, dtype: DType, layers_worker: W, use_flash_attn: bool) -> Self {
         let tokenizer_filename = tokenizer_path().await;
         let tokenizer = Tokenizer::from_file(tokenizer_filename).unwrap();
 
@@ -81,18 +59,30 @@ impl<W: ModelLayersWorker<(Tensor, u32)>> LlamaModel<W> {
         let config: LlamaConfig = serde_json::from_slice(&std::fs::read(config_filename).unwrap()).unwrap();
         let config = config.into_config(use_flash_attn);
 
+        let filenames = model_filenames().await;
+        let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, dtype, &device).unwrap() };
+
+        let pre = LlamaPre::load(&vb, &config).unwrap();
+        let post = LlamaPost::load(&vb, &config).unwrap();
+
         Self {
             device,
             tokenizer,
+            pre,
             layers_worker,
+            post,
             config,
         }
     }
+}
 
-    pub async fn chat(&self, session: Session, cfg: ChatCfg, prompt: &str, tx: Sender<String>) -> Result<()> {
+#[async_trait::async_trait]
+impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for LlamaModel<W> {
+    async fn chat(&self, session: Session, cfg: ChatCfg, prompt: &str, tx: Sender<String>) -> Result<()> {
         let eos_token_id = self.config.eos_token_id.clone().or_else(|| self.tokenizer.token_to_id(EOS_TOKEN).map(LlamaEosToks::Single));
         let mut tokens = self.tokenizer.encode(prompt, true).unwrap().get_ids().to_vec();
         let mut tokenizer = TokenOutputStream::new(self.tokenizer.clone());
+        println!("tokens {tokens:?}");
 
         let mut logits_processor = {
             let temperature = cfg.temperature;
@@ -112,6 +102,8 @@ impl<W: ModelLayersWorker<(Tensor, u32)>> LlamaModel<W> {
         let mut start_gen = std::time::Instant::now();
         let mut index_pos = 0;
         let mut token_generated = 0;
+
+        self.layers_worker.start(session).await;
         for index in 0..cfg.max_len {
             let (context_size, context_index) = if USE_KV_CACHE && index > 0 {
                 (1, index_pos)
@@ -123,8 +115,9 @@ impl<W: ModelLayersWorker<(Tensor, u32)>> LlamaModel<W> {
             }
             let ctxt = &tokens[tokens.len().saturating_sub(context_size)..];
             let input = Tensor::new(ctxt, &&self.device)?.unsqueeze(0)?;
-            let seq_len = input.dims2().unwrap().1;
+            let (input, seq_len) = self.pre.forward(&input)?;
             let (logits, _) = self.layers_worker.forward(session, 0, (input, seq_len as u32), context_index).await?;
+            let logits = self.post.forward(&logits, seq_len)?;
             let logits = logits.squeeze(0)?;
             let logits = if cfg.repeat_penalty == 1. {
                 logits
@@ -156,7 +149,7 @@ impl<W: ModelLayersWorker<(Tensor, u32)>> LlamaModel<W> {
         }
         let dt = start_gen.elapsed();
         println!("\n\n{} tokens generated ({} token/s)\n", token_generated, (token_generated - 1) as f64 / dt.as_secs_f64(),);
-
+        self.layers_worker.finish(session).await;
         Ok(())
     }
 }

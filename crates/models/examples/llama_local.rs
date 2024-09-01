@@ -1,9 +1,9 @@
 use candle_core::{DType, Device, Tensor};
 use models::{
     get_device,
-    llama::{new_layers, ChatCfg, LlamaLayersWorker, LlamaModel},
+    llama::{new_layers, LlamaLayersWorker, LlamaModel},
     remote::TensorBuf,
-    ModelLayersWorker,
+    ChatCfg, ChatModel, ModelLayersWorker,
 };
 use protocol::{ModelLayersRanger, Session};
 use tokio::time::Instant;
@@ -12,10 +12,10 @@ use tokio::time::Instant;
 async fn main() {
     let device = get_device(false).unwrap();
     let layers_worker = VirtualRemoteLayersWorker::new(device.clone()).await;
-    let llama = LlamaModel::new(device, layers_worker, false).await;
+    let llama = LlamaModel::new(device, DType::F16, layers_worker, false).await;
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     tokio::spawn(async move {
-        llama.chat(Session::new(), ChatCfg::default(), "Hello how are you?", tx).await.unwrap();
+        llama.chat(Session::new(), ChatCfg::default(), "hello", tx).await.unwrap();
     });
 
     let begin = Instant::now();
@@ -38,7 +38,7 @@ struct VirtualRemoteLayersWorker {
 
 impl VirtualRemoteLayersWorker {
     async fn new(device: Device) -> Self {
-        let layers_worker = new_layers(DType::F16, device.clone(), false, ModelLayersRanger::new(0, 10)).await;
+        let layers_worker = new_layers(DType::F16, device.clone(), false, ModelLayersRanger::new(0, 16)).await;
         Self { layers_worker, device }
     }
 }
@@ -55,7 +55,6 @@ impl ModelLayersWorker<(Tensor, u32)> for VirtualRemoteLayersWorker {
 
     async fn forward(&self, session: Session, step: u32, (tensor, seq_len): (Tensor, u32), index_pos: u32) -> candle_core::Result<(Tensor, u32)> {
         let tensor_buf = TensorBuf::from(tensor).to_vec();
-        // println!("convert req to buf {}", buf.len());
         //convert back to request
         let tensor = TensorBuf::try_from(tensor_buf).unwrap().to_tensor(&self.device)?;
 

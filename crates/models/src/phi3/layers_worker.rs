@@ -5,7 +5,7 @@ use crate::{ModelLayersRanger, ModelLayersWorker, Session};
 
 use super::internal::{layer_weights::LayerWeights, mlp::Mlp, qlinear::QLinear};
 use super::layers_cache::LayersCache;
-use super::rms_norm;
+use super::{model_path, rms_norm};
 
 pub struct Phi3LayersWorker {
     range: ModelLayersRanger,
@@ -15,7 +15,11 @@ pub struct Phi3LayersWorker {
 }
 
 impl Phi3LayersWorker {
-    pub fn new<R: std::io::Seek + std::io::Read>(use_flash_attn: bool, range: ModelLayersRanger, ct: &gguf_file::Content, reader: &mut R, device: &Device) -> Result<Self> {
+    pub async fn new(use_flash_attn: bool, range: ModelLayersRanger, device: &Device) -> Result<Self> {
+        let mut reader_f = std::fs::File::open(model_path().await).unwrap();
+        let ct = gguf_file::Content::read(&mut reader_f).unwrap();
+        let reader = &mut reader_f;
+
         let md_get = |s: &str| match ct.metadata.get(s) {
             None => candle_core::bail!("cannot find {s} in metadata"),
             Some(v) => Ok(v),

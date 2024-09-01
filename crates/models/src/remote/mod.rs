@@ -58,6 +58,7 @@ impl From<Tensor> for TensorBuf {
     fn from(value: Tensor) -> Self {
         let mut buf = Vec::new();
         value.write_bytes(&mut buf).expect("Should write to buf");
+        log::info!("from tensor {:?} {:?} to buf {}", value.shape(), value.dtype(), buf.len());
         Self {
             dims: value.shape().dims().to_vec(),
             buf,

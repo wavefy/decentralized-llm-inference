@@ -1,10 +1,7 @@
-use candle_core::quantized::gguf_file;
+use candle_core::{DType, Device, Tensor};
 use clap::Parser;
-use models::{
-    get_device,
-    phi3::{self, Phi3LayersWorker},
-};
-use protocol::{ModelLayersRanger, Session};
+use models::{get_device, llama, phi3, ModelLayersWorker};
+use protocol::ModelLayersRanger;
 use tokio::signal;
 use worker::WorkerRunner;
 
@@ -46,11 +43,21 @@ async fn main() {
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
 
     let device = get_device(false).unwrap();
-    let mut model_file = std::fs::File::open(phi3::model_path().await).unwrap();
-    let model = gguf_file::Content::read(&mut model_file).unwrap();
-    let layers_worker = Phi3LayersWorker::new(false, ModelLayersRanger::new(args.layers_from, args.layers_to), &model, &mut model_file, &device).unwrap();
+    match args.model.as_str() {
+        "phi3" => {
+            let layers_worker = phi3::Phi3LayersWorker::new(false, ModelLayersRanger::new(args.layers_from, args.layers_to), &device).await.unwrap();
+            run(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to, 32).await;
+        }
+        "llama" => {
+            let layers_worker = llama::new_layers(DType::F16, device.clone(), false, ModelLayersRanger::new(args.layers_from, args.layers_to)).await;
+            run(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to, 16).await;
+        }
+        _ => panic!("unsupported"),
+    }
+}
 
-    let (mut worker, _virtual_model_layer) = WorkerRunner::new(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to, 32).await;
+async fn run<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static>(registry_server: &str, device: Device, layers_worker: LW, model: &str, node_id: &str, from: u32, to: u32, total: u32) {
+    let (mut worker, _virtual_model_layer) = WorkerRunner::new(registry_server, device, layers_worker, model, node_id, from, to, total).await;
     loop {
         tokio::select! {
             e = worker.recv() => match e {

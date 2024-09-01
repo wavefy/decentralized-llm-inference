@@ -1,5 +1,5 @@
 use candle_core::{DType, Device, IndexOp, Result, Tensor, D};
-use candle_nn::{embedding, linear, Embedding, Linear, Module, RmsNorm, VarBuilder};
+use candle_nn::{embedding, linear_no_bias as linear, Embedding, Linear, Module, RmsNorm, VarBuilder};
 use std::{collections::HashMap, f32::consts::PI};
 
 pub const DEFAULT_MAX_SEQ_LEN: usize = 4096;
@@ -396,52 +396,68 @@ impl Block {
 }
 
 #[derive(Debug, Clone)]
-pub struct Llama {
-    wte: Embedding,
+pub struct LlamaLayers {
     blocks: Vec<Block>,
-    ln_f: RmsNorm,
-    lm_head: Linear,
 }
 
-impl Llama {
-    // required by LLaVA
-    pub fn embed(&self, x: &Tensor) -> Result<Tensor> {
-        self.wte.forward(x)
-    }
-    // required by LLaVA
-    pub fn forward_input_embed(&self, input_embed: &Tensor, index_pos: usize, cache: &mut Cache) -> Result<Tensor> {
-        let (_, seq_len, _) = input_embed.dims3()?;
-        let mut x = input_embed.clone();
+impl LlamaLayers {
+    pub fn forward(&self, mut x: Tensor, index_pos: usize, cache: &mut Cache) -> Result<Tensor> {
         for (block_idx, block) in self.blocks.iter().enumerate() {
             x = block.forward(&x, index_pos, block_idx, cache)?;
         }
-        let x = self.ln_f.forward(&x)?;
-        let x = x.i((.., seq_len - 1, ..))?.contiguous()?;
-        let logits = self.lm_head.forward(&x)?;
-        logits.to_dtype(DType::F32)
-    }
-
-    pub fn forward(&self, x: &Tensor, index_pos: usize, cache: &mut Cache) -> Result<Tensor> {
-        let (_b_sz, seq_len) = x.dims2()?;
-        let mut x = self.wte.forward(x)?;
-        for (block_idx, block) in self.blocks.iter().enumerate() {
-            x = block.forward(&x, index_pos, block_idx, cache)?;
-        }
-        let x = self.ln_f.forward(&x)?;
-        let x = x.i((.., seq_len - 1, ..))?.contiguous()?;
-        let logits = self.lm_head.forward(&x)?;
-        logits.to_dtype(DType::F32)
+        Ok(x)
     }
 
     pub fn load(vb: VarBuilder, cfg: &Config, from: u32, to: u32) -> Result<Self> {
         assert!(to <= cfg.num_hidden_layers as u32, "to {to} need to < {}", cfg.num_hidden_layers);
         assert!(from < to, "{from} need < {to}");
 
+        let blocks: Vec<_> = (from..to)
+            .map(|i| {
+                println!("loading {i}");
+                Block::load(vb.pp(&format!("model.layers.{i}")), cfg).unwrap()
+            })
+            .collect();
+
+        Ok(Self { blocks })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LlamaPre {
+    wte: Embedding,
+}
+
+impl LlamaPre {
+    pub fn forward(&self, x: &Tensor) -> Result<(Tensor, usize)> {
+        let (_b_sz, seq_len) = x.dims2()?;
+        self.wte.forward(x).map(|t| (t, seq_len))
+    }
+
+    pub fn load(vb: &VarBuilder, cfg: &Config) -> Result<Self> {
         let wte = embedding(cfg.vocab_size, cfg.hidden_size, vb.pp("model.embed_tokens"))?;
+
+        Ok(Self { wte })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LlamaPost {
+    ln_f: RmsNorm,
+    lm_head: Linear,
+}
+
+impl LlamaPost {
+    pub fn forward(&self, x: &Tensor, seq_len: usize) -> Result<Tensor> {
+        let x = self.ln_f.forward(&x)?;
+        let x = x.i((.., seq_len - 1, ..))?.contiguous()?;
+        let logits = self.lm_head.forward(&x)?;
+        logits.to_dtype(DType::F32)
+    }
+
+    pub fn load(vb: &VarBuilder, cfg: &Config) -> Result<Self> {
         let lm_head = linear(cfg.hidden_size, cfg.vocab_size, vb.pp("lm_head"))?;
         let ln_f = candle_nn::rms_norm(cfg.hidden_size, cfg.rms_norm_eps, vb.pp("model.norm"))?;
-        let blocks: Vec<_> = (from..to).map(|i| Block::load(vb.pp(&format!("model.layers.{i}")), cfg).unwrap()).collect();
-
-        Ok(Self { wte, blocks, ln_f, lm_head })
+        Ok(Self { ln_f, lm_head })
     }
 }

@@ -106,13 +106,14 @@ impl WorkerRunner {
                         log::info!("[WorkerRunner] llm core processing {session:?} forward step {step}, payload {} bytes", payload.len());
                         let tensor = TensorBuf::try_from(payload).unwrap().to_tensor(&device).unwrap();
                         let (res_tensor, _) = layers_worker.forward(session, step, (tensor, seq_len), index_pos).await.unwrap();
-                        let res_tensor = TensorBuf::from(res_tensor).to_vec();
+                        let res_tensor_buf = TensorBuf::from(res_tensor.clone()).to_vec();
                         log::info!(
-                            "[WorkerRunner] llm core processed {session:?} forward step {step}, res payload {} bytes take {:?}",
-                            res_tensor.len(),
+                            "[WorkerRunner] llm core processed {session:?} forward step {step}, res payload {} bytes, dims {:?} take {:?}",
+                            res_tensor_buf.len(),
+                            res_tensor.shape().dims(),
                             start_ms.elapsed()
                         );
-                        llm_res_tx.send(LlmRes::Backward(session, step, res_tensor, seq_len, index_pos)).await.unwrap();
+                        llm_res_tx.send(LlmRes::Backward(session, step, res_tensor_buf, seq_len, index_pos)).await.unwrap();
                     }
                     LlmReq::End(session) => {
                         log::info!("[WorkerRunner] llm core processing {session:?} end");

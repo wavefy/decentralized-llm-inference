@@ -1,9 +1,9 @@
-use candle_core::{quantized::gguf_file, Device, Tensor};
+use candle_core::{Device, Tensor};
 use models::{
     get_device,
-    phi3::{model_path, Phi3LayersWorker, Phi3Model},
+    phi3::{Phi3LayersWorker, Phi3Model},
     remote::TensorBuf,
-    ModelLayersWorker,
+    ChatCfg, ChatModel, ModelLayersWorker,
 };
 use protocol::{ModelLayersRanger, Session};
 use tokio::time::Instant;
@@ -15,7 +15,7 @@ async fn main() {
     let phi3 = Phi3Model::new(device, layers_worker).await;
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     tokio::spawn(async move {
-        phi3.chat(Session::new(), 299792458, 500, "Write function max(x1, x2) in Rust", tx).await.unwrap();
+        phi3.chat(Session::new(), ChatCfg::default(), "Write function max(x1, x2) in Rust", tx).await.unwrap();
     });
 
     let begin = Instant::now();
@@ -38,9 +38,7 @@ struct VirtualRemoteLayersWorker {
 
 impl VirtualRemoteLayersWorker {
     async fn new(device: &Device) -> Self {
-        let mut model_file = std::fs::File::open(model_path().await).unwrap();
-        let model = gguf_file::Content::read(&mut model_file).unwrap();
-        let layers_worker = Phi3LayersWorker::new(false, ModelLayersRanger::new(0, 31), &model, &mut model_file, &device).unwrap();
+        let layers_worker = Phi3LayersWorker::new(false, ModelLayersRanger::new(0, 31), &device).await.unwrap();
         Self {
             layers_worker,
             device: device.clone(),

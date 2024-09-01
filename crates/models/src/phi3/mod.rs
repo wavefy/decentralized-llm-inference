@@ -15,7 +15,7 @@ use tokio::sync::mpsc::Sender;
 use crate::{
     logits_processor::{LogitsProcessor, Sampling},
     token_output_stream::TokenOutputStream,
-    ModelLayersWorker, ModelPostprocessor, ModelPreprocessor, Session,
+    ChatCfg, ChatModel, ModelLayersWorker, ModelPostprocessor, ModelPreprocessor, Session,
 };
 
 mod internal;
@@ -65,12 +65,15 @@ impl<W: ModelLayersWorker<(Tensor, u32)>> Phi3Model<W> {
             postprocessor,
         }
     }
+}
 
-    pub async fn chat(&self, session: Session, seed: u64, max_len: u32, prompt: &str, tx: Sender<String>) -> Result<()> {
+#[async_trait::async_trait]
+impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for Phi3Model<W> {
+    async fn chat(&self, session: Session, cfg: ChatCfg, prompt: &str, tx: Sender<String>) -> Result<()> {
         let mut tos = TokenOutputStream::new(self.tokenizer.clone());
         let tokens = tos.tokenizer().encode(prompt, true).unwrap();
         let mut all_tokens = vec![];
-        let mut logits_processor = LogitsProcessor::from_sampling(seed, Sampling::ArgMax);
+        let mut logits_processor = LogitsProcessor::from_sampling(cfg.seed, Sampling::ArgMax);
         let tokens = tokens.get_ids();
 
         self.layers_worker.start(session).await;
@@ -95,7 +98,7 @@ impl<W: ModelLayersWorker<(Tensor, u32)>> Phi3Model<W> {
         }
         let eos_token = *tos.tokenizer().get_vocab(true).get("<|endoftext|>").unwrap();
 
-        for index in 0..max_len {
+        for index in 0..cfg.max_len {
             let input = Tensor::new(&[next_token], &self.device)?.unsqueeze(0)?;
             let step1 = self.preprocessor.forward(session, input).await?;
             let step2 = self.layers_worker.forward(session, index as u32 + 1, step1, tokens.len() as u32 + index).await?;
