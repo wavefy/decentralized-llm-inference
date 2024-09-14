@@ -1678,7 +1678,6 @@ version = "0.1.0"
 dependencies = [
  "log",
  "prost",
- "protocol",
  "rand",
  "str0m",
  "tokio",
@@ -2123,6 +2122,8 @@ dependencies = [
 name = "protocol"
 version = "0.1.0"
 dependencies = [
+ "model-router",
+ "network",
  "prost",
  "prost-build",
  "prost-types",

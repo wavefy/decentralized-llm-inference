@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-protocol = { path = "../protocol", version = "0.1.0" }
 tokio = { workspace = true, features = ["sync"] }
 str0m = "0.6"
 log = { workspace = true }

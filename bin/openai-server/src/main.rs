@@ -57,13 +57,13 @@ async fn main() {
     match args.model.as_str() {
         "phi3" => {
             let layers_worker = phi3::Phi3LayersWorker::new(false, ModelLayersRanger::new(args.layers_from, args.layers_to), &device).await.unwrap();
-            let (mut worker, virtual_model_layers) = WorkerRunner::new(&args.registry_server, device.clone(), layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to, 32).await;
+            let (mut worker, virtual_model_layers) = WorkerRunner::<32>::new(&args.registry_server, device.clone(), layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
             let model = phi3::Phi3Model::new(device.clone(), virtual_model_layers).await;
             run(&mut worker, device, model.into(), &args.model, &args.node_id, args.layers_from, args.layers_to, 32, args.http_bind).await;
         }
         "llama" => {
             let layers_worker = llama::new_layers(DType::F16, device.clone(), false, ModelLayersRanger::new(args.layers_from, args.layers_to)).await;
-            let (mut worker, virtual_model_layers) = WorkerRunner::new(&args.registry_server, device.clone(), layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to, 32).await;
+            let (mut worker, virtual_model_layers) = WorkerRunner::<16>::new(&args.registry_server, device.clone(), layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
             let model = llama::LlamaModel::new(device.clone(), DType::F16, virtual_model_layers, false).await;
             run(&mut worker, device, model.into(), &args.model, &args.node_id, args.layers_from, args.layers_to, 16, args.http_bind).await;
         }
@@ -71,7 +71,17 @@ async fn main() {
     }
 }
 
-async fn run<CM: ChatModel + Send + Sync + 'static>(worker: &mut WorkerRunner, device: Device, model_exe: Arc<CM>, model: &str, node_id: &str, from: u32, to: u32, total: u32, http_bind: SocketAddr) {
+async fn run<CM: ChatModel + Send + Sync + 'static, const MODEL_LAYERS: usize>(
+    worker: &mut WorkerRunner<MODEL_LAYERS>,
+    device: Device,
+    model_exe: Arc<CM>,
+    model: &str,
+    node_id: &str,
+    from: u32,
+    to: u32,
+    total: u32,
+    http_bind: SocketAddr,
+) {
     let tcp_listener = TcpListener::bind(http_bind).await.expect("Should open tcp port");
 
     loop {

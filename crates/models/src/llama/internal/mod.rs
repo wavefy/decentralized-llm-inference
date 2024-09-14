@@ -412,14 +412,14 @@ impl LlamaLayers {
         assert!(to <= cfg.num_hidden_layers as u32, "to {to} need to < {}", cfg.num_hidden_layers);
         assert!(from < to, "{from} need < {to}");
 
-        let blocks: Vec<_> = (from..to)
-            .map(|i| {
-                println!("loading {i}");
-                Block::load(vb.pp(&format!("model.layers.{i}")), cfg).unwrap()
-            })
-            .collect();
+        // let blocks: Vec<_> = (from..to)
+        //     .map(|i| {
+        //         println!("loading {i}");
+        //         Block::load(vb.pp(&format!("model.layers.{i}")), cfg).unwrap()
+        //     })
+        //     .collect();
 
-        Ok(Self { blocks })
+        Ok(Self { blocks: vec![] })
     }
 }
 

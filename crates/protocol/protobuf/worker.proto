@@ -7,7 +7,13 @@ package worker;
 
 message Event {
     message SyncReq {
+        message LayerRemoteInfo {
+            bool enable = 1;
+            uint32 cost = 2;
+            uint64 last_updated = 3;
+        }
 
+        repeated LayerRemoteInfo layers = 1;
     }
 
     message SyncRes {
@@ -16,17 +22,19 @@ message Event {
 
     message StartReq {
         uint64 session_id = 1;
-        uint32 from = 2;
+        uint32 from_layer = 2;
     }
 
     message StartRes {
         uint64 session_id = 1;
+        uint32 from_layer = 2;
     }
 
     message ForwardReq {
         uint64 session_id = 1;
-        uint32 step = 2;
-        uint32 from = 3;
+        uint32 from_layer = 2;
+
+        uint32 step = 3;
         bytes payload = 4;
         uint32 seq_len = 5;
         uint32 index_pos = 6;
@@ -34,18 +42,22 @@ message Event {
 
     message ForwardRes {
         uint64 session_id = 1;
-        uint32 step = 2;
-        bytes payload = 3;
+        uint32 from_layer = 2;
+
+        uint32 step = 3;
+        bytes payload = 4;
         uint32 seq_len = 5;
         uint32 index_pos = 6;
     }
 
     message EndReq {
         uint64 session_id = 1;
+        uint32 from_layer = 2;
     }
 
     message EndRes {
         uint64 session_id = 1;
+        uint32 from_layer = 2;
     }
 
     oneof event {

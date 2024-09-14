@@ -46,18 +46,26 @@ async fn main() {
     match args.model.as_str() {
         "phi3" => {
             let layers_worker = phi3::Phi3LayersWorker::new(false, ModelLayersRanger::new(args.layers_from, args.layers_to), &device).await.unwrap();
-            run(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to, 32).await;
+            run::<_, 32>(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
         }
         "llama" => {
             let layers_worker = llama::new_layers(DType::F16, device.clone(), false, ModelLayersRanger::new(args.layers_from, args.layers_to)).await;
-            run(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to, 16).await;
+            run::<_, 16>(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
         }
         _ => panic!("unsupported"),
     }
 }
 
-async fn run<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static>(registry_server: &str, device: Device, layers_worker: LW, model: &str, node_id: &str, from: u32, to: u32, total: u32) {
-    let (mut worker, _virtual_model_layer) = WorkerRunner::new(registry_server, device, layers_worker, model, node_id, from, to, total).await;
+async fn run<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_LAYERS: usize>(
+    registry_server: &str,
+    device: Device,
+    layers_worker: LW,
+    model: &str,
+    node_id: &str,
+    from: u32,
+    to: u32,
+) {
+    let (mut worker, _virtual_model_layer) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, device, layers_worker, model, node_id, from, to).await;
     loop {
         tokio::select! {
             e = worker.recv() => match e {

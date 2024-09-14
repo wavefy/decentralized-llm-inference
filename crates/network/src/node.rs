@@ -101,6 +101,16 @@ impl<MSG: prost::Message + Default> NetworkNode<MSG> {
         Ok(appended)
     }
 
+    pub fn broadcast(&mut self, data: &MSG) -> Result<(), MsgError> {
+        let buf = data.encode_to_vec();
+        for (conn_id, conn) in self.conns.iter_mut() {
+            conn.send_data(&buf);
+            Self::pop_conn(conn_id, conn, &self.udp, &mut self.events, &mut self.shared_udp);
+        }
+
+        Ok(())
+    }
+
     pub fn connect(&mut self, dest: NodeId) -> Option<(ConnId, String)> {
         if !self.nodes.contains_key(&dest) {
             let conn_id = ConnId::rand();
