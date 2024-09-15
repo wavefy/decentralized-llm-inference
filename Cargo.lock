@@ -1673,17 +1673,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "network"
-version = "0.1.0"
-dependencies = [
- "log",
- "prost",
- "rand",
- "str0m",
- "tokio",
-]
-
-[[package]]
 name = "nix"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1913,6 +1902,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
+name = "p2p-network"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "prost",
+ "rand",
+ "str0m",
+ "tokio",
+]
+
+[[package]]
 name = "parking_lot"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2123,7 +2123,7 @@ name = "protocol"
 version = "0.1.0"
 dependencies = [
  "model-router",
- "network",
+ "p2p-network",
  "prost",
  "prost-build",
  "prost-types",
@@ -2308,7 +2308,7 @@ dependencies = [
  "async-trait",
  "futures-util",
  "log",
- "network",
+ "p2p-network",
  "poem",
  "prost",
  "protocol",
@@ -3495,7 +3495,7 @@ dependencies = [
  "log",
  "model-router",
  "models",
- "network",
+ "p2p-network",
  "protocol",
  "registry",
  "tokio",

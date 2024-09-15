@@ -56,9 +56,10 @@ pub struct TensorBuf {
 
 impl From<Tensor> for TensorBuf {
     fn from(value: Tensor) -> Self {
+        log::info!("[TensorBuf] convert from tensor {:?} {:?} to buf", value.shape(), value.dtype());
         let mut buf = Vec::new();
         value.write_bytes(&mut buf).expect("Should write to buf");
-        log::info!("from tensor {:?} {:?} to buf {}", value.shape(), value.dtype(), buf.len());
+        log::info!("[TensorBuf] convert from tensor {:?} {:?} to buf {} done", value.shape(), value.dtype(), buf.len());
         Self {
             dims: value.shape().dims().to_vec(),
             buf,
@@ -78,7 +79,10 @@ impl TryFrom<Vec<u8>> for TensorBuf {
 
 impl TensorBuf {
     pub fn to_tensor(&self, device: &Device) -> Result<Tensor, candle_core::Error> {
-        Tensor::from_raw_buffer(&self.buf, self.dtype.into(), &self.dims, &device)
+        log::info!("[TensorBuf] convert from buf to tensor");
+        let res = Tensor::from_raw_buffer(&self.buf, self.dtype.into(), &self.dims, &device);
+        log::info!("[TensorBuf] convert from buf to tensor done");
+        res
     }
 
     pub fn to_vec(&self) -> Vec<u8> {

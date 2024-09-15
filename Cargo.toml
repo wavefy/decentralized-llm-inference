@@ -7,7 +7,7 @@ members = [
     "bin/registry-server",
     "crates/model-router",
     "crates/models",
-    "crates/network",
+    "crates/p2p-network",
     "crates/openai-protocol",
     "crates/protocol",
     "crates/registry",

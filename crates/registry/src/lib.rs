@@ -1,6 +1,3 @@
-use network::addr::NodeId;
-use protocol::ModelLayersRanger;
-
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]

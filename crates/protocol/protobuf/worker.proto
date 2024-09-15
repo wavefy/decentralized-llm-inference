@@ -20,54 +20,22 @@ message Event {
 
     }
 
-    message StartReq {
-        uint64 session_id = 1;
-        uint32 from_layer = 2;
+    message RpcReq {
+        uint32 seq = 1;
+        string cmd = 2;
+        bytes payload = 3;
     }
 
-    message StartRes {
-        uint64 session_id = 1;
-        uint32 from_layer = 2;
-    }
-
-    message ForwardReq {
-        uint64 session_id = 1;
-        uint32 from_layer = 2;
-
-        uint32 step = 3;
-        bytes payload = 4;
-        uint32 seq_len = 5;
-        uint32 index_pos = 6;
-    }
-
-    message ForwardRes {
-        uint64 session_id = 1;
-        uint32 from_layer = 2;
-
-        uint32 step = 3;
-        bytes payload = 4;
-        uint32 seq_len = 5;
-        uint32 index_pos = 6;
-    }
-
-    message EndReq {
-        uint64 session_id = 1;
-        uint32 from_layer = 2;
-    }
-
-    message EndRes {
-        uint64 session_id = 1;
-        uint32 from_layer = 2;
+    message RpcRes {
+        uint32 seq = 1;
+        bool success = 2;
+        bytes payload = 3;
     }
 
     oneof event {
         SyncReq sync_req = 1;
         SyncRes sync_res = 2;
-        StartReq start_req = 3;
-        StartRes start_res = 4;
-        ForwardReq forward_req = 5;
-        ForwardRes forward_res = 6;
-        EndReq end_req = 7;
-        EndRes end_res = 8;
+        RpcReq rpc_req = 3;
+        RpcRes rpc_res= 4;
     }
 }

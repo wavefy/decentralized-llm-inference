@@ -2,13 +2,10 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Range};
 
 const ROUTE_TIMEOUT_MS: u64 = 5_000; // a route will be removed after 5 seconds no update
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LayerRange(pub u32, pub u32);
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct RoutePath<Node> {
-    pub local: Option<LayerRange>,
-    pub remote: Option<(Node, LayerRange, u32, u64)>,
+    pub local: Option<Range<u32>>,
+    pub remote: Option<(Node, Range<u32>, u32, u64)>,
 }
 
 impl<Node> RoutePath<Node> {
@@ -87,6 +84,14 @@ impl<Node: Clone + Debug + Eq + Hash, const MODEL_LAYERS: usize> RouteTable<Node
         }
     }
 
+    pub fn on_disconnected(&mut self, node: Node) {
+        for (_layer, route) in self.remote_layers.iter_mut().enumerate() {
+            if route.remotes.remove(&node).is_some() {
+                route.update_best();
+            }
+        }
+    }
+
     pub fn create_sync(&self, now_ms: u64) -> RouteSync {
         log::info!("create sync");
         let mut layers = vec![None; MODEL_LAYERS];
@@ -121,20 +126,20 @@ impl<Node: Clone + Debug + Eq + Hash, const MODEL_LAYERS: usize> RouteTable<Node
             if self.local_layers.end == MODEL_LAYERS as u32 {
                 // if this is last
                 Some(RoutePath {
-                    local: Some(LayerRange(next_layer, MODEL_LAYERS as u32)),
+                    local: Some(next_layer..MODEL_LAYERS as u32),
                     remote: None,
                 })
             } else {
                 // if we need the help from other node
                 self.remote_layers[self.local_layers.end as usize].next.as_ref().map(|(dest, info)| RoutePath {
-                    local: Some(LayerRange(next_layer, self.local_layers.end)),
-                    remote: Some((dest.clone(), LayerRange(self.local_layers.end, MODEL_LAYERS as u32), info.cost, info.last_updated)),
+                    local: Some(next_layer..self.local_layers.end),
+                    remote: Some((dest.clone(), self.local_layers.end..MODEL_LAYERS as u32, info.cost, info.last_updated)),
                 })
             }
         } else {
             self.remote_layers[next_layer as usize].next.as_ref().map(|(dest, info)| RoutePath {
                 local: None,
-                remote: Some((dest.clone(), LayerRange(next_layer, MODEL_LAYERS as u32), info.cost, info.last_updated)),
+                remote: Some((dest.clone(), next_layer..MODEL_LAYERS as u32, info.cost, info.last_updated)),
             })
         }
     }
@@ -165,7 +170,7 @@ impl<Node: Clone> LayerRemotePaths<Node> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{table::ROUTE_TIMEOUT_MS, LayerRange, LayerRemoteInfo, RouteSync};
+    use crate::{table::ROUTE_TIMEOUT_MS, LayerRemoteInfo, RouteSync};
 
     type RoutePath = super::RoutePath<u8>;
     type RouteTable = super::RouteTable<u8, 3>;
@@ -180,29 +185,11 @@ mod tests {
             }
         );
 
-        assert_eq!(
-            table.select_next(0),
-            Some(RoutePath {
-                local: Some(LayerRange(0, 3)),
-                remote: None
-            })
-        );
+        assert_eq!(table.select_next(0), Some(RoutePath { local: Some(0..3), remote: None }));
 
-        assert_eq!(
-            table.select_next(1),
-            Some(RoutePath {
-                local: Some(LayerRange(1, 3)),
-                remote: None
-            })
-        );
+        assert_eq!(table.select_next(1), Some(RoutePath { local: Some(1..3), remote: None }));
 
-        assert_eq!(
-            table.select_next(2),
-            Some(RoutePath {
-                local: Some(LayerRange(2, 3)),
-                remote: None
-            })
-        );
+        assert_eq!(table.select_next(2), Some(RoutePath { local: Some(2..3), remote: None }));
     }
 
     #[test]
@@ -217,21 +204,9 @@ mod tests {
 
         assert_eq!(table.select_next(0), None);
 
-        assert_eq!(
-            table.select_next(1),
-            Some(RoutePath {
-                local: Some(LayerRange(1, 3)),
-                remote: None
-            })
-        );
+        assert_eq!(table.select_next(1), Some(RoutePath { local: Some(1..3), remote: None }));
 
-        assert_eq!(
-            table.select_next(2),
-            Some(RoutePath {
-                local: Some(LayerRange(2, 3)),
-                remote: None
-            })
-        );
+        assert_eq!(table.select_next(2), Some(RoutePath { local: Some(2..3), remote: None }));
     }
 
     #[test]
@@ -263,25 +238,13 @@ mod tests {
             table.select_next(0),
             Some(RoutePath {
                 local: None,
-                remote: Some((REMOTE_NODE, LayerRange(0, 3), 20, 100))
+                remote: Some((REMOTE_NODE, 0..3, 20, 100))
             })
         );
 
-        assert_eq!(
-            table.select_next(1),
-            Some(RoutePath {
-                local: Some(LayerRange(1, 3)),
-                remote: None
-            })
-        );
+        assert_eq!(table.select_next(1), Some(RoutePath { local: Some(1..3), remote: None }));
 
-        assert_eq!(
-            table.select_next(2),
-            Some(RoutePath {
-                local: Some(LayerRange(2, 3)),
-                remote: None
-            })
-        );
+        assert_eq!(table.select_next(2), Some(RoutePath { local: Some(2..3), remote: None }));
     }
 
     #[test]
@@ -302,8 +265,8 @@ mod tests {
         assert_eq!(
             table.select_next(0),
             Some(RoutePath {
-                local: Some(LayerRange(0, 1)),
-                remote: Some((REMOTE_NODE, LayerRange(1, 3), 10, 100))
+                local: Some(0..1),
+                remote: Some((REMOTE_NODE, 1..3, 10, 100))
             })
         );
 
@@ -311,7 +274,7 @@ mod tests {
             table.select_next(1),
             Some(RoutePath {
                 local: None,
-                remote: Some((REMOTE_NODE, LayerRange(1, 3), 10, 100))
+                remote: Some((REMOTE_NODE, 1..3, 10, 100))
             })
         );
 
@@ -319,7 +282,7 @@ mod tests {
             table.select_next(2),
             Some(RoutePath {
                 local: None,
-                remote: Some((REMOTE_NODE, LayerRange(2, 3), 10, 100))
+                remote: Some((REMOTE_NODE, 2..3, 10, 100))
             })
         );
     }

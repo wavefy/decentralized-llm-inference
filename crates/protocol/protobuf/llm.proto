@@ -1,0 +1,37 @@
+//
+// Protocol for working with worker
+//
+syntax = "proto3";
+
+package llm;
+
+message StartReq {
+    uint64 session = 1;
+    uint64 chat_id = 2;
+    uint32 from_layer = 3;
+}
+
+message StartRes {
+    bool success = 1;
+}
+
+message ForwardReq {
+    uint64 session = 1;
+    uint32 step = 2;
+    bytes embedding = 3;
+    uint32 index_pos = 4;
+    uint32 seq_len = 5;
+}
+
+message ForwardRes {
+    bool success = 1;
+    bytes embedding = 2;
+}
+
+message EndReq {
+    uint64 session = 1;
+}
+
+message EndRes {
+    bool success = 1;
+}

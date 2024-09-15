@@ -1,14 +1,14 @@
-use std::collections::{HashMap, VecDeque};
-
-use network::addr::NodeId;
-use protocol::{
-    registry::to_worker::{NeighboursReply, UpdateReply},
-    ModelLayersRanger,
+use std::{
+    collections::{HashMap, VecDeque},
+    ops::Range,
 };
+
+use p2p_network::addr::NodeId;
+use protocol::registry::to_worker::{NeighboursReply, UpdateReply};
 
 #[derive(Default, Debug)]
 struct NodeInfo {
-    layers: Option<ModelLayersRanger>,
+    layers: Option<Range<u32>>,
 }
 
 #[derive(Default)]
@@ -27,10 +27,7 @@ impl SessionManager {
             protocol::registry::to_registry::Event::Update(update) => {
                 log::info!("[SessionManager] from node {} update layers [{}, {}]", node.0, update.from_layer, update.to_layer);
                 let node_info = self.nodes.get_mut(&node).expect("Should have node");
-                node_info.layers = Some(ModelLayersRanger {
-                    from: update.from_layer,
-                    to: update.to_layer,
-                });
+                node_info.layers = Some(update.from_layer..update.to_layer);
                 let neighbours = protocol::registry::to_worker::Event::Update(UpdateReply {
                     neighbours: self.nodes.keys().filter(|n| *n != &node).map(|n| n.0.clone()).collect::<Vec<_>>(),
                 });

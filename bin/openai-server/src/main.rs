@@ -2,8 +2,8 @@ use std::{net::SocketAddr, sync::Arc};
 
 use candle_core::{DType, Device};
 use clap::Parser;
-use models::{get_device, llama, phi3, ChatCfg, ChatModel};
-use protocol::{ModelLayersRanger, Session};
+use models::{fake, get_device, llama, phi3, ChatCfg, ChatModel};
+use protocol::Session;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -56,15 +56,21 @@ async fn main() {
     let device = get_device(false).unwrap();
     match args.model.as_str() {
         "phi3" => {
-            let layers_worker = phi3::Phi3LayersWorker::new(false, ModelLayersRanger::new(args.layers_from, args.layers_to), &device).await.unwrap();
-            let (mut worker, virtual_model_layers) = WorkerRunner::<32>::new(&args.registry_server, device.clone(), layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
+            let layers_worker = phi3::Phi3LayersWorker::new(false, args.layers_from..args.layers_to, &device).await.unwrap();
+            let (mut worker, virtual_model_layers) = WorkerRunner::<32>::new(&args.registry_server, &args.model, &args.node_id, args.layers_from..args.layers_to, layers_worker, device.clone()).await;
             let model = phi3::Phi3Model::new(device.clone(), virtual_model_layers).await;
             run(&mut worker, device, model.into(), &args.model, &args.node_id, args.layers_from, args.layers_to, 32, args.http_bind).await;
         }
         "llama" => {
-            let layers_worker = llama::new_layers(DType::F16, device.clone(), false, ModelLayersRanger::new(args.layers_from, args.layers_to)).await;
-            let (mut worker, virtual_model_layers) = WorkerRunner::<16>::new(&args.registry_server, device.clone(), layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
+            let layers_worker = llama::new_layers(DType::F16, device.clone(), false, args.layers_from..args.layers_to).await;
+            let (mut worker, virtual_model_layers) = WorkerRunner::<16>::new(&args.registry_server, &args.model, &args.node_id, args.layers_from..args.layers_to, layers_worker, device.clone()).await;
             let model = llama::LlamaModel::new(device.clone(), DType::F16, virtual_model_layers, false).await;
+            run(&mut worker, device, model.into(), &args.model, &args.node_id, args.layers_from, args.layers_to, 16, args.http_bind).await;
+        }
+        "fake" => {
+            let layers_worker = fake::FakeLayersWorker::new(args.layers_from..args.layers_to);
+            let (mut worker, virtual_model_layers) = WorkerRunner::<16>::new(&args.registry_server, &args.model, &args.node_id, args.layers_from..args.layers_to, layers_worker, device.clone()).await;
+            let model = fake::FakeModel::new(device.clone(), virtual_model_layers).await;
             run(&mut worker, device, model.into(), &args.model, &args.node_id, args.layers_from, args.layers_to, 16, args.http_bind).await;
         }
         _ => panic!("unsupported"),

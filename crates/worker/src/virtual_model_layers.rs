@@ -1,57 +1,43 @@
+use std::sync::Arc;
+
 use candle_core::{Device, Result, Tensor};
 use models::{remote::TensorBuf, ModelLayersWorker};
-use protocol::Session;
-use tokio::sync::{mpsc::Sender, oneshot};
+use protocol::{
+    llm::{EndReq, ForwardReq, StartReq},
+    Session,
+};
 
-use crate::{SessionReq, SessionRes};
+use crate::model_service::ModelService;
 
-pub struct VirtualModelLayers {
+pub struct VirtualModelLayers<LW, const MODEL_LAYERS: usize> {
     pub device: Device,
-    pub session_control: Sender<(Session, SessionReq, oneshot::Sender<SessionRes>)>,
+    pub model_service: Arc<ModelService<LW, MODEL_LAYERS>>,
 }
 
 #[async_trait::async_trait]
-impl ModelLayersWorker<(Tensor, u32)> for VirtualModelLayers {
-    fn layers(&self) -> protocol::ModelLayersRanger {
-        todo!()
-    }
-
+impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_LAYERS: usize> ModelLayersWorker<(Tensor, u32)> for VirtualModelLayers<LW, MODEL_LAYERS> {
     async fn start(&self, session: Session) {
-        log::info!("[VirtualModel] starting ..");
-        let (tx, rx) = oneshot::channel();
-        self.session_control.send((session, SessionReq::Start, tx)).await.unwrap();
-        let res = rx.await.unwrap();
-        if let SessionRes::Started(_) = res {
-            log::info!("[VirtualModel] started ..");
-        } else {
-            log::warn!("invalid response for start request {res:?}");
-        }
+        self.model_service
+            .start(StartReq {
+                session: session.0,
+                chat_id: session.0,
+                from_layer: 0,
+            })
+            .await;
     }
 
     async fn forward(&self, session: Session, step: u32, (tensor, seq_len): (Tensor, u32), index_pos: u32) -> Result<(Tensor, u32)> {
-        let tensor_buf = TensorBuf::from(tensor).to_vec();
-        log::info!("[VirtualModel] forwarding {} bytes ..", tensor_buf.len());
-        let (tx, rx) = oneshot::channel();
-        self.session_control.send((session, SessionReq::Forward(step, tensor_buf, seq_len, index_pos), tx)).await.unwrap();
-        let res = rx.await.unwrap();
-        if let SessionRes::Backward(_, res_tensor_buf, seq_len, index_pos) = res {
-            log::info!("[VirtualModel] forwarded got {} bytes ..", res_tensor_buf.len());
-            let res_tensor = TensorBuf::try_from(res_tensor_buf).unwrap().to_tensor(&self.device)?;
+        let embedding = TensorBuf::from(tensor).to_vec();
+        let res = self.model_service.forward(ForwardReq { session: session.0, embedding, step, seq_len, index_pos }).await;
+        if res.success {
+            let res_tensor = TensorBuf::try_from(res.embedding).unwrap().to_tensor(&self.device)?;
             Ok((res_tensor, seq_len))
         } else {
-            panic!("invalid response for forward request {res:?}");
+            Err(std::io::Error::new(std::io::ErrorKind::Other, "RpcError").into())
         }
     }
 
     async fn finish(&self, session: Session) {
-        log::info!("[VirtualModel] finishing ..");
-        let (tx, rx) = oneshot::channel();
-        self.session_control.send((session, SessionReq::Stop, tx)).await.unwrap();
-        let res = rx.await.unwrap();
-        if let SessionRes::Stopped(_) = res {
-            log::info!("[VirtualModel] finished..");
-        } else {
-            log::warn!("invalid response for stop request {res:?}");
-        }
+        self.model_service.end(EndReq { session: session.0 }).await;
     }
 }

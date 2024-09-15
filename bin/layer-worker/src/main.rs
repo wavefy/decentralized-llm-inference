@@ -1,7 +1,6 @@
 use candle_core::{DType, Device, Tensor};
 use clap::Parser;
-use models::{get_device, llama, phi3, ModelLayersWorker};
-use protocol::ModelLayersRanger;
+use models::{fake, get_device, llama, phi3, ModelLayersWorker};
 use tokio::signal;
 use worker::WorkerRunner;
 
@@ -45,11 +44,15 @@ async fn main() {
     let device = get_device(false).unwrap();
     match args.model.as_str() {
         "phi3" => {
-            let layers_worker = phi3::Phi3LayersWorker::new(false, ModelLayersRanger::new(args.layers_from, args.layers_to), &device).await.unwrap();
+            let layers_worker = phi3::Phi3LayersWorker::new(false, args.layers_from..args.layers_to, &device).await.unwrap();
             run::<_, 32>(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
         }
         "llama" => {
-            let layers_worker = llama::new_layers(DType::F16, device.clone(), false, ModelLayersRanger::new(args.layers_from, args.layers_to)).await;
+            let layers_worker = llama::new_layers(DType::F16, device.clone(), false, args.layers_from..args.layers_to).await;
+            run::<_, 16>(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
+        }
+        "fake" => {
+            let layers_worker = fake::FakeLayersWorker::new(args.layers_from..args.layers_to);
             run::<_, 16>(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
         }
         _ => panic!("unsupported"),
@@ -65,7 +68,7 @@ async fn run<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const
     from: u32,
     to: u32,
 ) {
-    let (mut worker, _virtual_model_layer) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, device, layers_worker, model, node_id, from, to).await;
+    let (mut worker, _virtual_layers) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, model, node_id, from..to, layers_worker, device).await;
     loop {
         tokio::select! {
             e = worker.recv() => match e {

@@ -1,10 +1,10 @@
-use std::path::PathBuf;
+use std::{ops::Range, path::PathBuf};
 
 use candle_core::{DType, Device, Result, Tensor};
 use candle_nn::VarBuilder;
 use hf_hub::{api::tokio::Api, Repo, RepoType};
 use internal::{Config, LlamaConfig, LlamaEosToks, LlamaPost, LlamaPre};
-use protocol::{ModelLayersRanger, Session};
+use protocol::Session;
 use tokenizers::Tokenizer;
 use tokio::sync::mpsc::Sender;
 
@@ -154,7 +154,7 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
     }
 }
 
-pub async fn new_layers(dtype: DType, device: Device, use_flash_attn: bool, range: ModelLayersRanger) -> LlamaLayersWorker {
+pub async fn new_layers(dtype: DType, device: Device, use_flash_attn: bool, range: Range<u32>) -> LlamaLayersWorker {
     let config_filename = config_path().await;
     let config: LlamaConfig = serde_json::from_slice(&std::fs::read(config_filename).unwrap()).unwrap();
     let config = config.into_config(use_flash_attn);

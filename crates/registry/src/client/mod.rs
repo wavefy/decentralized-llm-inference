@@ -1,14 +1,11 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, ops::Range};
 
-use network::{addr::NodeId, node::ConnId};
+use p2p_network::{addr::NodeId, node::ConnId};
 use protobuf_stream::ProtobufStream;
-use protocol::{
-    registry::{
-        relay_data,
-        to_registry::{self, UpdateRequest},
-        RelayData, ToRegistry, ToWorker,
-    },
-    ModelLayersRanger,
+use protocol::registry::{
+    relay_data,
+    to_registry::{self, UpdateRequest},
+    RelayData, ToRegistry, ToWorker,
 };
 use tokio_tungstenite::connect_async;
 
@@ -42,11 +39,11 @@ impl RegistryClient {
         }
     }
 
-    pub fn update_layer(&mut self, layers_range: ModelLayersRanger) {
+    pub fn update_layer(&mut self, layers_range: Range<u32>) {
         self.queue.push_back(ToRegistry {
             event: Some(to_registry::Event::Update(UpdateRequest {
-                from_layer: layers_range.from,
-                to_layer: layers_range.to,
+                from_layer: layers_range.start,
+                to_layer: layers_range.end,
             })),
         });
     }

@@ -1,8 +1,9 @@
 use candle_core::utils::{cuda_is_available, metal_is_available};
 use candle_core::{Device, Result};
-use protocol::{ModelLayersRanger, Session};
+use protocol::Session;
 use tokio::sync::mpsc::Sender;
 
+pub mod fake;
 pub mod llama;
 mod logits_processor;
 pub mod phi3;
@@ -50,8 +51,7 @@ pub trait ModelPreprocessor<IN, OUT> {
 }
 
 #[async_trait::async_trait]
-pub trait ModelLayersWorker<E> {
-    fn layers(&self) -> ModelLayersRanger;
+pub trait ModelLayersWorker<E>: Send + Sync + 'static {
     async fn start(&self, session: Session);
     /// Async function for allowing remote execute
     /// This function calculate from input to output embedding

@@ -1,21 +1,22 @@
+use std::ops::Range;
+
 use candle_core::{quantized::gguf_file, DType, Device, Result, Tensor};
 use candle_nn::Module;
 
-use crate::{ModelLayersRanger, ModelLayersWorker, Session};
+use crate::{ModelLayersWorker, Session};
 
 use super::internal::{layer_weights::LayerWeights, mlp::Mlp, qlinear::QLinear};
 use super::layers_cache::LayersCache;
 use super::{model_path, rms_norm};
 
 pub struct Phi3LayersWorker {
-    range: ModelLayersRanger,
     layers: Vec<LayerWeights>,
     caches: LayersCache,
     span: tracing::Span,
 }
 
 impl Phi3LayersWorker {
-    pub async fn new(use_flash_attn: bool, range: ModelLayersRanger, device: &Device) -> Result<Self> {
+    pub async fn new(use_flash_attn: bool, range: Range<u32>, device: &Device) -> Result<Self> {
         let mut reader_f = std::fs::File::open(model_path().await).unwrap();
         let ct = gguf_file::Content::read(&mut reader_f).unwrap();
         let reader = &mut reader_f;
@@ -37,7 +38,7 @@ impl Phi3LayersWorker {
         let neg_inf = Tensor::new(f32::NEG_INFINITY, device)?;
 
         let mut layers = Vec::with_capacity(range.len());
-        for layer_idx in range.from..=range.to {
+        for layer_idx in range.clone() {
             println!("load layer {layer_idx}");
             let prefix = format!("blk.{layer_idx}");
             let ffn_up = QLinear::new(&ct, reader, &format!("{prefix}.ffn_up"), device).unwrap();
@@ -68,7 +69,6 @@ impl Phi3LayersWorker {
         let span = tracing::span!(tracing::Level::TRACE, "layers_worker");
 
         Ok(Self {
-            range,
             layers,
             caches: LayersCache::new(range.len(), 2, max_seq_len),
             span,
@@ -85,10 +85,6 @@ impl Phi3LayersWorker {
 
 #[async_trait::async_trait]
 impl ModelLayersWorker<(Tensor, u32)> for Phi3LayersWorker {
-    fn layers(&self) -> ModelLayersRanger {
-        self.range
-    }
-
     async fn start(&self, session: Session) {
         for (idx, _) in self.layers.iter().enumerate() {
             self.caches.add_cache(idx, session);

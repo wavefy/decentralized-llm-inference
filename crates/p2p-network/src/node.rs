@@ -36,7 +36,7 @@ pub enum IncomingError {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum MsgError {
+pub enum SendError {
     NoNode,
     NoConnection,
     ConnectionNotReady,
@@ -89,11 +89,11 @@ impl<MSG: prost::Message + Default> NetworkNode<MSG> {
         }
     }
 
-    pub fn send(&mut self, node: NodeId, data: &MSG) -> Result<usize, MsgError> {
+    pub fn send(&mut self, node: NodeId, data: &MSG) -> Result<usize, SendError> {
         let buf = data.encode_to_vec();
-        let conn_id = self.nodes.get(&node).ok_or(MsgError::NoNode)?;
-        let conn = self.conns.get_mut(conn_id).ok_or(MsgError::NoConnection)?;
-        let appended = conn.send_data(&buf).ok_or(MsgError::ConnectionNotReady)?;
+        let conn_id = self.nodes.get(&node).ok_or(SendError::NoNode)?;
+        let conn = self.conns.get_mut(conn_id).ok_or(SendError::NoConnection)?;
+        let appended = conn.send_data(&buf).ok_or(SendError::ConnectionNotReady)?;
         assert_eq!(buf.len(), appended, "Should send all buffer");
 
         Self::pop_conn(conn_id, conn, &self.udp, &mut self.events, &mut self.shared_udp);
@@ -101,7 +101,7 @@ impl<MSG: prost::Message + Default> NetworkNode<MSG> {
         Ok(appended)
     }
 
-    pub fn broadcast(&mut self, data: &MSG) -> Result<(), MsgError> {
+    pub fn broadcast(&mut self, data: &MSG) -> Result<(), SendError> {
         let buf = data.encode_to_vec();
         for (conn_id, conn) in self.conns.iter_mut() {
             conn.send_data(&buf);

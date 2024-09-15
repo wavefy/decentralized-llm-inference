@@ -1,4 +1,4 @@
-use network::addr::NodeId;
+use p2p_network::addr::NodeId;
 use poem::{
     get, handler,
     listener::TcpListener,

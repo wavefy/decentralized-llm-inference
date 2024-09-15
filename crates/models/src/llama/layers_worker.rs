@@ -1,10 +1,10 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, ops::Range, sync::Arc};
 
 use candle_core::{DType, Device, Result, Tensor};
 use candle_nn::VarBuilder;
 use spin::{Mutex, RwLock};
 
-use crate::{ModelLayersRanger, ModelLayersWorker, Session};
+use crate::{ModelLayersWorker, Session};
 
 use super::{
     internal::{Cache, Config, LlamaLayers},
@@ -12,7 +12,6 @@ use super::{
 };
 
 pub struct LlamaLayersWorker {
-    range: ModelLayersRanger,
     caches: RwLock<HashMap<Session, Arc<Mutex<Cache>>>>,
     llama: LlamaLayers,
     cfg: Config,
@@ -21,10 +20,9 @@ pub struct LlamaLayersWorker {
 }
 
 impl LlamaLayersWorker {
-    pub fn new(range: ModelLayersRanger, vb: VarBuilder, cfg: Config, dtype: DType, device: Device) -> Result<Self> {
-        let llama = LlamaLayers::load(vb, &cfg, range.from, range.to)?;
+    pub fn new(range: Range<u32>, vb: VarBuilder, cfg: Config, dtype: DType, device: Device) -> Result<Self> {
+        let llama = LlamaLayers::load(vb, &cfg, range)?;
         Ok(Self {
-            range,
             caches: Default::default(),
             llama,
             cfg,
@@ -36,10 +34,6 @@ impl LlamaLayersWorker {
 
 #[async_trait::async_trait]
 impl ModelLayersWorker<(Tensor, u32)> for LlamaLayersWorker {
-    fn layers(&self) -> ModelLayersRanger {
-        self.range
-    }
-
     async fn start(&self, session: Session) {
         let cache = Cache::new(USE_KV_CACHE, self.dtype, &self.cfg, &self.device).unwrap();
         self.caches.write().insert(session, Arc::new(Mutex::new(cache)));

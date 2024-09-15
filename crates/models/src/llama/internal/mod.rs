@@ -1,6 +1,6 @@
 use candle_core::{DType, Device, IndexOp, Result, Tensor, D};
 use candle_nn::{embedding, linear_no_bias as linear, Embedding, Linear, Module, RmsNorm, VarBuilder};
-use std::{collections::HashMap, f32::consts::PI};
+use std::{collections::HashMap, f32::consts::PI, ops::Range};
 
 pub const DEFAULT_MAX_SEQ_LEN: usize = 4096;
 
@@ -408,18 +408,17 @@ impl LlamaLayers {
         Ok(x)
     }
 
-    pub fn load(vb: VarBuilder, cfg: &Config, from: u32, to: u32) -> Result<Self> {
-        assert!(to <= cfg.num_hidden_layers as u32, "to {to} need to < {}", cfg.num_hidden_layers);
-        assert!(from < to, "{from} need < {to}");
+    pub fn load(vb: VarBuilder, cfg: &Config, range: Range<u32>) -> Result<Self> {
+        assert!(range.end <= cfg.num_hidden_layers as u32, "to {} need to < {}", range.end, cfg.num_hidden_layers);
 
-        // let blocks: Vec<_> = (from..to)
-        //     .map(|i| {
-        //         println!("loading {i}");
-        //         Block::load(vb.pp(&format!("model.layers.{i}")), cfg).unwrap()
-        //     })
-        //     .collect();
+        let blocks: Vec<_> = range
+            .map(|i| {
+                println!("loading {i}");
+                Block::load(vb.pp(&format!("model.layers.{i}")), cfg).unwrap()
+            })
+            .collect();
 
-        Ok(Self { blocks: vec![] })
+        Ok(Self { blocks })
     }
 }
 

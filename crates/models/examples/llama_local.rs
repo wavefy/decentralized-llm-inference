@@ -5,7 +5,7 @@ use models::{
     remote::TensorBuf,
     ChatCfg, ChatModel, ModelLayersWorker,
 };
-use protocol::{ModelLayersRanger, Session};
+use protocol::Session;
 use tokio::time::Instant;
 
 #[tokio::main]
@@ -38,17 +38,13 @@ struct VirtualRemoteLayersWorker {
 
 impl VirtualRemoteLayersWorker {
     async fn new(device: Device) -> Self {
-        let layers_worker = new_layers(DType::F16, device.clone(), false, ModelLayersRanger::new(0, 16)).await;
+        let layers_worker = new_layers(DType::F16, device.clone(), false, 0..16).await;
         Self { layers_worker, device }
     }
 }
 
 #[async_trait::async_trait]
 impl ModelLayersWorker<(Tensor, u32)> for VirtualRemoteLayersWorker {
-    fn layers(&self) -> ModelLayersRanger {
-        self.layers_worker.layers()
-    }
-
     async fn start(&self, session: protocol::Session) {
         self.layers_worker.start(session).await;
     }

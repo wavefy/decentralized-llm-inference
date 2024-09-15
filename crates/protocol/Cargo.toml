@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-network = { path = "../network" }
+p2p-network = { path = "../p2p-network" }
 model-router = { path = "../model-router" }
 rand = { workspace = true }
 prost = { workspace = true }

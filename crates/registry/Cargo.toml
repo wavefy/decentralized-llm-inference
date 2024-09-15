@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-network = { path = "../network", version = "0.1.0", default-features = false }
+p2p-network = { path = "../p2p-network", version = "0.1.0", default-features = false }
 protocol = { path = "../protocol", version = "0.1.0" }
 
 log = { workspace = true }
