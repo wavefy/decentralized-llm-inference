@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+poem = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 log = { workspace = true }
 clap = { workspace = true }
 candle-core = { workspace = true }

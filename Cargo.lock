@@ -1829,7 +1829,10 @@ dependencies = [
  "clap",
  "log",
  "models",
+ "poem",
  "protocol",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing-subscriber",
  "worker",
@@ -1977,9 +1980,9 @@ checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 
 [[package]]
 name = "poem"
-version = "3.0.4"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1ba1c27f8f89e1bccdda0c680f72790545a11a8d8555819472f5839d7a8ca9d"
+checksum = "e5419c612a492fce4961c521dca0c2249b5c48dc46eb5c8048063843f37a711d"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -2012,9 +2015,9 @@ dependencies = [
 
 [[package]]
 name = "poem-derive"
-version = "3.0.4"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a62fea1692d80a000126f9b28d865012a160b80000abb53ccf152b428222c155"
+checksum = "cdfed15c1102d2a9a51b9f1aba945628c72ccb52fc5d3e4ad4ffbbd222e11821"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -3496,8 +3499,10 @@ dependencies = [
  "model-router",
  "models",
  "p2p-network",
+ "prost",
  "protocol",
  "registry",
+ "spin",
  "tokio",
 ]
 

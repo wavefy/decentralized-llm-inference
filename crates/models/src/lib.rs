@@ -37,7 +37,7 @@ impl Default for ChatCfg {
 }
 
 #[async_trait::async_trait]
-pub trait ChatModel {
+pub trait ChatModel: Send + Sync + 'static {
     async fn chat(&self, session: Session, cfg: ChatCfg, prompt: &str, tx: Sender<String>) -> Result<()>;
 }
 
