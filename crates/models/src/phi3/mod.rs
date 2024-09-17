@@ -70,6 +70,8 @@ impl<W: ModelLayersWorker<(Tensor, u32)>> Phi3Model<W> {
 #[async_trait::async_trait]
 impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for Phi3Model<W> {
     async fn chat(&self, session: Session, cfg: ChatCfg, prompt: &str, tx: Sender<String>) -> Result<()> {
+        log::info!("chatting with Phi3 model");
+        log::info!("prompt: {prompt}");
         let mut tos = TokenOutputStream::new(self.tokenizer.clone());
         let tokens = tos.tokenizer().encode(prompt, true).unwrap();
         let mut all_tokens = vec![];

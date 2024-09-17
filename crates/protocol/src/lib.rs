@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use model_router::{LayerRemoteInfo, RouteSync};
 
 pub mod registry {
@@ -17,6 +18,12 @@ pub struct Session(pub u64);
 impl Session {
     pub fn new() -> Self {
         Self(rand::random())
+    }
+}
+
+impl Display for Session {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Session({})", self.0)
     }
 }
 

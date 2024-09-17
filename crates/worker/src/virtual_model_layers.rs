@@ -28,7 +28,16 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
 
     async fn forward(&self, session: Session, step: u32, (tensor, seq_len): (Tensor, u32), index_pos: u32) -> Result<(Tensor, u32)> {
         let embedding = TensorBuf::from(tensor).to_vec();
-        let res = self.model_service.forward(ForwardReq { session: session.0, embedding, step, seq_len, index_pos }).await;
+        let res = self
+            .model_service
+            .forward(ForwardReq {
+                session: session.0,
+                embedding,
+                step,
+                seq_len,
+                index_pos,
+            })
+            .await;
         if res.success {
             let res_tensor = TensorBuf::try_from(res.embedding).unwrap().to_tensor(&self.device)?;
             Ok((res_tensor, seq_len))
@@ -38,6 +47,14 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
     }
 
     async fn finish(&self, session: Session) {
-        self.model_service.end(EndReq { session: session.0 }).await;
+        self.model_service
+            .end(
+                EndReq {
+                    session: session.0,
+                    client_address: "0x0".to_string(),
+                },
+                true,
+            )
+            .await;
     }
 }

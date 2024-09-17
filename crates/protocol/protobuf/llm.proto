@@ -13,6 +13,7 @@ message StartReq {
 
 message StartRes {
     bool success = 1;
+    repeated string addresses = 4;
 }
 
 message ForwardReq {
@@ -30,6 +31,7 @@ message ForwardRes {
 
 message EndReq {
     uint64 session = 1;
+    string client_address = 2;
 }
 
 message EndRes {

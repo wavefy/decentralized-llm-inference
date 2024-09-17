@@ -11,6 +11,7 @@ use protocol::{
     Session,
 };
 use spin::RwLock;
+use tokio::sync::mpsc::Sender;
 
 use crate::{rpc::RpcClientTx, ServiceHandler};
 
@@ -21,22 +22,35 @@ struct SessionContainer {
     remote: Option<(NodeId, Session)>,
 }
 
+pub enum WorkerEvent {
+    Start(bool, u64, Vec<String>),
+    Forward(bool, u64),
+    End(bool, u64, u32, String),
+}
+
 pub struct ModelService<LW, const MODEL_LAYERS: usize> {
     device: Device,
     layers: LW,
     rpc: RpcClientTx,
     sessions: RwLock<HashMap<Session, SessionContainer>>,
+    chat_session_token_count: RwLock<HashMap<u64, u32>>,
     router: Arc<RwLock<RouteTable<NodeId, MODEL_LAYERS>>>,
+    worker_event_tx: Sender<WorkerEvent>,
+    // TODO: Maybe move this elsewhere
+    address: String,
 }
 
 impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_LAYERS: usize> ModelService<LW, MODEL_LAYERS> {
-    pub fn new(layers: LW, device: Device, rpc: RpcClientTx, router: Arc<RwLock<RouteTable<NodeId, MODEL_LAYERS>>>) -> Self {
+    pub fn new(layers: LW, device: Device, rpc: RpcClientTx, router: Arc<RwLock<RouteTable<NodeId, MODEL_LAYERS>>>, worker_event_tx: Sender<WorkerEvent>, address: &str) -> Self {
         Self {
             layers,
             device,
             rpc,
             router,
+            chat_session_token_count: Default::default(),
             sessions: Default::default(),
+            worker_event_tx,
+            address: address.to_string(),
         }
     }
 }
@@ -61,7 +75,7 @@ impl<LW: ModelLayersWorker<(Tensor, u32)>, const MODEL_LAYERS: usize> ServiceHan
             }
             "END" => {
                 let end_req = EndReq::decode(req.payload.as_slice()).unwrap();
-                let res = self.end(end_req).await;
+                let res = self.end(end_req, false).await;
                 let mut payload = Vec::new();
                 res.encode(&mut payload).unwrap();
                 RpcRes { seq: req.seq, success: true, payload }
@@ -83,7 +97,8 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
         let route = if let Some(route) = self.router.read().select_next(req.from_layer) {
             route
         } else {
-            return StartRes { success: false };
+            log::warn!("[ModelService] chat {} start session {} with from_layer {} but no route", req.chat_id, req.session, req.from_layer);
+            return StartRes { success: false, addresses: vec![] };
         };
 
         self.sessions.write().insert(
@@ -94,6 +109,8 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
                 remote: route.remote.as_ref().map(|(d, ..)| (d.clone(), remote_session.clone())),
             },
         );
+
+        self.chat_session_token_count.write().insert(req.chat_id, 0);
 
         if let Some(layers) = route.local {
             log::info!("[ModelService] start session {} with local layers {layers:?}", req.session);
@@ -117,17 +134,24 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
                     },
                 )
                 .await
-                .unwrap_or(StartRes { success: false });
+                .unwrap_or(StartRes { success: false, ..Default::default() });
             log::info!(
                 "[ModelService] start session {} with remote {dest:?} layers {layers:?}, remote session {} done",
                 req.session,
                 remote_session.0
             );
-            res
+            let mut addresses = res.addresses.clone();
+            addresses.push(self.address.clone());
+
+            StartRes { success: res.success, addresses }
         } else {
-            StartRes { success: true }
+            StartRes {
+                success: true,
+                addresses: vec![self.address.clone()],
+            }
         };
         log::info!("[ModelService] chat {} start session {} with from_layer {} done", req.chat_id, req.session, req.from_layer);
+        self.worker_event_tx.send(WorkerEvent::Start(res.success, req.chat_id, res.addresses.clone())).await.unwrap();
         res
     }
 
@@ -135,6 +159,9 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
         if let Some(container) = self.sessions.read().get(&Session(req.session)).cloned() {
             log::info!("[ModelService] session {} forward step {} processing ...", req.session, req.step);
             let embedding = if let Some(layers) = container.local {
+                if let Some(token_count) = self.chat_session_token_count.write().get_mut(&container.chat_id) {
+                    *token_count += 1;
+                }
                 log::info!("[ModelService] session {} forward step {} local {layers:?} layers", req.session, req.step);
                 let embedding = TensorBuf::try_from(req.embedding).unwrap().to_tensor(&self.device).unwrap();
                 let (embedding, _) = self.layers.forward(Session(req.session), req.step, (embedding, req.seq_len), req.index_pos).await.unwrap();
@@ -145,7 +172,12 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
             };
 
             let res = if let Some((dest, remote_session)) = &container.remote {
-                log::info!("[ModelService] session {} forward step {} remote {dest:?} with remote session {}", req.session, req.step, remote_session.0);
+                log::info!(
+                    "[ModelService] session {} forward step {} remote {dest:?} with remote session {}",
+                    req.session,
+                    req.step,
+                    remote_session.0
+                );
                 let res = self
                     .rpc
                     .request(
@@ -161,7 +193,12 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
                     )
                     .await
                     .unwrap_or(ForwardRes { success: false, ..Default::default() });
-                log::info!("[ModelService] session {} forward step {} remote {dest:?} with remote session {} done", req.session, req.step, remote_session.0);
+                log::info!(
+                    "[ModelService] session {} forward step {} remote {dest:?} with remote session {} done",
+                    req.session,
+                    req.step,
+                    remote_session.0
+                );
                 res
             } else {
                 ForwardRes { success: true, embedding }
@@ -174,8 +211,16 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
         }
     }
 
-    pub async fn end(&self, req: EndReq) -> EndRes {
-        if let Some(container) = self.sessions.write().remove(&Session(req.session)) {
+    pub async fn end(&self, req: EndReq, is_root: bool) -> EndRes {
+        let res = if let Some(container) = self.sessions.write().remove(&Session(req.session)) {
+            let token_count = if let Some(token_count) = self.chat_session_token_count.write().remove(&container.chat_id) {
+                token_count
+            } else {
+                0
+            };
+            log::info!("[ModelService] Session Token count: {}", token_count);
+            // TODO: recheck this flow, it can be improved
+            self.worker_event_tx.send(WorkerEvent::End(true, container.chat_id, token_count, req.client_address.clone())).await;
             log::warn!("[ModelService] session {} ending ...", req.session);
             if let Some(layers) = container.local {
                 log::warn!("[ModelService] session {} end local {layers:?} layers", req.session);
@@ -184,7 +229,22 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
 
             if let Some((dest, remote_session)) = &container.remote {
                 log::info!("[ModelService] session {} end remote {dest:?} with remote session {}", req.session, remote_session.0);
-                let res = self.rpc.request(dest.clone(), "END", EndReq { session: remote_session.0 }).await.unwrap_or(EndRes { success: false });
+                let client_address = match is_root {
+                    false => req.client_address.clone(),
+                    true => self.address.clone(),
+                };
+                let res = self
+                    .rpc
+                    .request(
+                        dest.clone(),
+                        "END",
+                        EndReq {
+                            session: remote_session.0,
+                            client_address,
+                        },
+                    )
+                    .await
+                    .unwrap_or(EndRes { success: false });
                 log::info!("[ModelService] session {} end remote {dest:?} with remote session {} done", req.session, remote_session.0);
                 res
             } else {
@@ -193,6 +253,7 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
         } else {
             log::warn!("[ModelService] end session {} but not found", req.session);
             EndRes { success: false }
-        }
+        };
+        res
     }
 }

@@ -1,5 +1,11 @@
+use std::str::FromStr;
+
 use candle_core::{DType, Device, Tensor};
 use clap::Parser;
+use contract::{
+    aptos_sdk::{rest_client::{aptos_api_types::Address, AptosBaseUrl}, types::LocalAccount},
+    client::OnChainClient,
+};
 use models::{fake, get_device, llama, phi3, ModelLayersWorker};
 use tokio::signal;
 use worker::WorkerRunner;
@@ -27,6 +33,14 @@ struct Args {
     /// model layers, layer 0 is embeding work, from 1 is for matrix jobs
     #[arg(env, long)]
     layers_to: u32,
+
+    /// Wallet private key
+    #[arg(env, long, default_value = "0x69d91353993001d80ef74f7a27fcb15456d4d6298c755a5316a0a0d87b6b39b9")]
+    private_key: String,
+
+    /// Contract address
+    #[arg(env, long, default_value = "0x9123e2561d81ba5f77473b8dc664fa75179c841061d12264508894610b9d0b7a")]
+    contract_address: String,
 }
 
 #[tokio::main]
@@ -40,20 +54,60 @@ async fn main() {
     }
 
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
-
     let device = get_device(false).unwrap();
+
+    let account = LocalAccount::from_private_key(&args.private_key, 0).expect("Invalid private key");
+    let account_address = account.address().to_string();
+    let onchain_client = OnChainClient::new(account, AptosBaseUrl::Testnet, &args.contract_address);
+    log::info!("[OpenAIServer] onchain client initialized");
+    let current_balance = onchain_client.get_current_balance().await.expect("Failed to get current balance");
+    log::info!("[OpenAIServer] current balance: {}", current_balance);
+
     match args.model.as_str() {
         "phi3" => {
             let layers_worker = phi3::Phi3LayersWorker::new(false, args.layers_from..args.layers_to, &device).await.unwrap();
-            run::<_, 32>(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
+            run::<_, 32>(
+                &args.registry_server,
+                device,
+                layers_worker,
+                &args.model,
+                &args.node_id,
+                args.layers_from,
+                args.layers_to,
+                &account_address,
+                &onchain_client,
+            )
+            .await;
         }
         "llama" => {
             let layers_worker = llama::new_layers(DType::F16, device.clone(), false, args.layers_from..args.layers_to).await;
-            run::<_, 16>(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
+            run::<_, 16>(
+                &args.registry_server,
+                device,
+                layers_worker,
+                &args.model,
+                &args.node_id,
+                args.layers_from,
+                args.layers_to,
+                &account_address,
+                &onchain_client,
+            )
+            .await;
         }
         "fake" => {
             let layers_worker = fake::FakeLayersWorker::new(args.layers_from..args.layers_to);
-            run::<_, 16>(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
+            run::<_, 16>(
+                &args.registry_server,
+                device,
+                layers_worker,
+                &args.model,
+                &args.node_id,
+                args.layers_from,
+                args.layers_to,
+                &account_address,
+                &onchain_client,
+            )
+            .await;
         }
         _ => panic!("unsupported"),
     }
@@ -67,13 +121,41 @@ async fn run<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const
     node_id: &str,
     from: u32,
     to: u32,
+    address: &str,
+    onchain_client: &OnChainClient,
 ) {
-    let (mut worker, _virtual_layers) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, model, node_id, from..to, layers_worker, device).await;
+    let (worker_event_tx, mut worker_event_rx) = tokio::sync::mpsc::channel(10);
+    let (mut worker, _virtual_layers) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, model, node_id, from..to, layers_worker, device, address, worker_event_tx).await;
     loop {
         tokio::select! {
             e = worker.recv() => match e {
                 Some(e) => {},
                 None => break,
+            },
+            e = worker_event_rx.recv() => match e {
+                Some(worker::WorkerEvent::Start(success, chat_id, addresses)) => {
+                    log::info!("[OpenAIServer] WorkerEvent::Start {:?}", addresses);
+                },
+                Some(worker::WorkerEvent::End(success, chat_id, count, client_address)) => {
+                    log::info!("[OpenAIServer] WorkerEvent::End token count: {count}");
+                    log::info!("[OpenAIServer] WorkerEvent::End client_address: {:?}", client_address);
+                    if !success {
+                        log::error!("[OpenAIServer] WorkerEvent::End failed");
+                        continue;
+                    }
+                    let onchain_session_id = onchain_client.get_session_id(Address::from_str(&client_address).unwrap().into(), chat_id).await;
+                    if let Ok(onchain_session_id) = onchain_session_id {
+                        let res = onchain_client.claim_tokens(Address::from_str(&client_address).unwrap(), onchain_session_id, count.into()).await;
+                        if let Ok(res) = res {
+                            log::info!("[OpenAIServer] token_claim success: {res:?}");
+                        } else {
+                            log::error!("[OpenAIServer] token_claim failed: {res:?}");
+                        }
+                    } else {
+                        log::error!("[OpenAIServer] get_session_id failed: {onchain_session_id:?}");
+                    }
+                },
+                _ => {},
             },
             _ = signal::ctrl_c() => {
                 worker.shutdown().await;

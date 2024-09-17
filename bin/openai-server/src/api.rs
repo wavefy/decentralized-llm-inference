@@ -80,7 +80,7 @@ struct ModelList {
     data: Vec<Model>,
 }
 
-const MODELS: [&str; 3] = ["custom"];
+const MODELS: [&str; 3] = ["custom", "custom1", "custom2"];
 
 struct AsyncReadRx {
     rx: Receiver<String>,
