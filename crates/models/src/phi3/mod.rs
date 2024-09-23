@@ -15,7 +15,7 @@ use tokio::sync::mpsc::Sender;
 use crate::{
     logits_processor::{LogitsProcessor, Sampling},
     token_output_stream::TokenOutputStream,
-    ChatCfg, ChatModel, ModelLayersWorker, ModelPostprocessor, ModelPreprocessor, Session,
+    utils, ChatCfg, ChatModel, ModelLayersWorker, ModelPostprocessor, ModelPreprocessor, Session,
 };
 
 mod internal;
@@ -75,12 +75,26 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
         let mut tos = TokenOutputStream::new(self.tokenizer.clone());
         let tokens = tos.tokenizer().encode(prompt, true).unwrap();
         let mut all_tokens = vec![];
-        let mut logits_processor = LogitsProcessor::from_sampling(cfg.seed, Sampling::ArgMax);
+        let mut logits_processor = {
+            let temperature = cfg.temperature;
+            let sampling = if temperature <= 0. {
+                Sampling::ArgMax
+            } else {
+                match (cfg.top_k, cfg.top_p) {
+                    (None, None) => Sampling::All { temperature },
+                    (Some(k), None) => Sampling::TopK { k, temperature },
+                    (None, Some(p)) => Sampling::TopP { p, temperature },
+                    (Some(k), Some(p)) => Sampling::TopKThenTopP { k, p, temperature },
+                }
+            };
+            LogitsProcessor::from_sampling(cfg.seed, sampling)
+        };
         let tokens = tokens.get_ids();
 
         self.layers_worker.start(session).await;
 
         // for first cycle, process input prompt
+        // we split it into tokens, and then process each token one by one for avoiding big message size
         let mut next_token = {
             let mut next_token = 0;
             for (pos, token) in tokens.iter().enumerate() {
@@ -106,6 +120,12 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
             let step2 = self.layers_worker.forward(session, index as u32 + 1, step1, tokens.len() as u32 + index).await?;
             let logits = self.postprocessor.forward(session, step2).await?;
             let logits = logits.squeeze(0)?;
+            let logits = if cfg.repeat_penalty == 1. {
+                logits
+            } else {
+                let start_at = all_tokens.len().saturating_sub(cfg.repeat_last_n);
+                utils::apply_repeat_penalty(&logits, cfg.repeat_penalty, &all_tokens[start_at..])?
+            };
             next_token = logits_processor.sample(&logits)?;
             all_tokens.push(next_token);
             if let Some(t) = tos.next_token(next_token)? {
