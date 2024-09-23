@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use clap::Parser;
-use std::{env, sync::Arc};
+use std::env;
 
 use core::net::SocketAddr;
 use openai_server::start_server;
@@ -14,6 +14,10 @@ struct Args {
     /// http bind addr
     #[arg(env, long, default_value = "127.0.0.1:1234")]
     http_bind: SocketAddr,
+
+    /// stun server
+    #[arg(env, long, default_value = "stun.l.google.com:19302")]
+    stun_server: String,
 
     /// registry server
     #[arg(env, long, default_value = "ws://127.0.0.1:3000/ws")]
@@ -47,17 +51,17 @@ async fn main() {
 
     tauri::Builder::default()
         .setup(move |app| {
-            let window = app.get_window("main").unwrap();
+            // let window = app.get_window("main").unwrap();
             // window.open_devtools();
             tauri::async_runtime::spawn(async move {
-                start_server(&args.registry_server, &args.model, &args.node_id, args.layers_from..args.layers_to, args.http_bind).await;
+                start_server(&args.registry_server, &args.model, &args.node_id, args.layers_from..args.layers_to, args.http_bind, &args.stun_server).await;
             });
             Ok(())
         })
         .build(generate_context!())
         .expect("error while running tauri application")
         .run(|_app_handle, _ev| {
-            // log::info!("Tauri application initialized.");
+            log::info!("Tauri application initialized.");
             {}
         })
 }
