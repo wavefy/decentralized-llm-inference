@@ -155,9 +155,14 @@ pub async fn get_model(Path(model_id): Path<String>) -> Result<Response, Error> 
 
 #[handler]
 pub async fn chat_completions(Json(req): Json<ChatCompletionRequest>, data: Data<&Arc<dyn ChatModel>>) -> impl IntoResponse {
+    let mut cfg = ChatCfg::default();
+    if let Some(temperature) = req.temperature {
+        cfg.temperature = temperature as f64;
+    }
+    if let Some(max_tokens) = req.max_tokens {
+        cfg.max_len = max_tokens as u32;
+    }
     let stream = req.stream.unwrap_or(false);
-    let temperature = req.temperature.unwrap_or(0.7);
-    let max_tokens = req.max_tokens.unwrap_or(512);
 
     let prompt = build_prompt(&req.model, req.messages);
     log::info!("prompt: {}", prompt);
@@ -168,9 +173,6 @@ pub async fn chat_completions(Json(req): Json<ChatCompletionRequest>, data: Data
         tokio::spawn(async move {
             let session = Session::new();
             let (tx, mut rx) = channel(1);
-            let mut cfg = ChatCfg::default();
-            cfg.temperature = temperature as f64;
-            cfg.max_len = max_tokens as u32;
             tokio::spawn(async move { model_exe.chat(session, cfg, &prompt, tx).await });
             while let Some(out) = rx.recv().await {
                 let response = json!({
