@@ -42,30 +42,6 @@ struct ChatCompletionRequest {
     stream: Option<bool>,
 }
 
-// #[derive(Debug, Serialize)]
-// struct ChatCompletionResponse {
-//     id: String,
-//     object: String,
-//     created: i64,
-//     model: String,
-//     choices: Vec<Choice>,
-//     usage: Usage,
-// }
-
-// #[derive(Debug, Serialize)]
-// struct Choice {
-//     index: i32,
-//     message: Message,
-//     finish_reason: String,
-// }
-
-// #[derive(Debug, Serialize)]
-// struct Usage {
-//     prompt_tokens: usize,
-//     completion_tokens: usize,
-//     total_tokens: usize,
-// }
-
 #[derive(Debug, Serialize)]
 struct Model {
     id: String,
@@ -80,7 +56,7 @@ struct ModelList {
     data: Vec<Model>,
 }
 
-const MODELS: [&str; 3] = ["custom"];
+const MODELS: [&str; 1] = ["phi3"];
 
 struct AsyncReadRx {
     rx: Receiver<String>,
@@ -149,7 +125,7 @@ pub async fn list_models() -> Response {
             id: id.to_string(),
             object: "model".to_string(),
             created: 1684275908, // using a fixed date for simplicity
-            owned_by: "openai".to_string(),
+            owned_by: "_".to_string(),
         })
         .collect();
 
@@ -168,7 +144,7 @@ pub async fn get_model(Path(model_id): Path<String>) -> Result<Response, Error> 
             id: id.to_string(),
             object: "model".to_string(),
             created: 1684275908, // using a fixed date for simplicity
-            owned_by: "openai".to_string(),
+            owned_by: "_".to_string(),
         };
 
         Ok(Response::builder().header("Content-Type", "application/json").body(Body::from_json(&model).unwrap()))
@@ -181,9 +157,10 @@ pub async fn get_model(Path(model_id): Path<String>) -> Result<Response, Error> 
 pub async fn chat_completions(Json(req): Json<ChatCompletionRequest>, data: Data<&Arc<dyn ChatModel>>) -> impl IntoResponse {
     let stream = req.stream.unwrap_or(false);
     let temperature = req.temperature.unwrap_or(0.7);
-    let max_tokens = req.max_tokens.unwrap_or(100);
+    let max_tokens = req.max_tokens.unwrap_or(512);
 
-    let prompt = req.messages[1].content[0].text.clone(); //TODO generate with rule
+    let prompt = build_prompt(&req.model, req.messages);
+    log::info!("prompt: {}", prompt);
 
     if stream {
         let (stream, stream_tx) = AsyncReadRx::new();
@@ -217,28 +194,49 @@ pub async fn chat_completions(Json(req): Json<ChatCompletionRequest>, data: Data
             .body(body)
     } else {
         todo!()
-        // let response = ChatCompletionResponse {
-        //     id: "chatcmpl-123".to_string(),
-        //     object: "chat.completion".to_string(),
-        //     created: 1684275908,
-        //     model: req.model,
-        //     choices: vec![Choice {
-        //         index: 0,
-        //         message: Message {
-        //             role: "assistant".to_string(),
-        //             content: vec![MessageContent {
-        //                 _type: "text".to_string(),
-        //                 text: words[..max_words].join(" "),
-        //             }],
-        //         },
-        //         finish_reason: "length".to_string(),
-        //     }],
-        //     usage: Usage {
-        //         prompt_tokens: req.messages.iter().map(|m| m.content[0].text.split_whitespace().count()).sum(),
-        //         completion_tokens: max_words,
-        //         total_tokens: req.messages.iter().map(|m| m.content[0].text.split_whitespace().count()).sum::<usize>() + max_words,
-        //     },
-        // };
-        // Response::builder().header("Content-Type", "application/json").body(Body::from_json(&response).unwrap())
+    }
+}
+
+fn build_prompt(model: &str, messages: Vec<Message>) -> String {
+    match model {
+        "phi3" => {
+            let mut prompt = String::new();
+            for message in messages {
+                match message.role.as_str() {
+                    "system" => {
+                        prompt.push_str(&format!("<|system|>\n{}<|end|>", message.content[0].text));
+                    }
+                    "user" => {
+                        prompt.push_str(&format!("<|user|>\n{}<|end|>", message.content[0].text));
+                    }
+                    "assistant" => {
+                        prompt.push_str(&format!("<|assistant|>\n{}<|end|>", message.content[0].text));
+                    }
+                    _ => panic!("unsupported role: {}", message.role),
+                }
+            }
+            prompt.push_str("<|assistant|>\n");
+            prompt
+        }
+        "llama3" => {
+            let mut prompt = String::from("<|begin_of_text|>");
+            for message in messages {
+                match message.role.as_str() {
+                    "system" => {
+                        prompt.push_str(&format!("<|start_header_id|>system<|end_header_id|>\n{}<|eot_id|>", message.content[0].text));
+                    }
+                    "user" => {
+                        prompt.push_str(&format!("<|start_header_id|>user<|end_header_id|>\n{}<|eot_id|>", message.content[0].text));
+                    }
+                    "assistant" => {
+                        prompt.push_str(&format!("<|start_header_id|>assistant<|end_header_id|>\n{}<|eot_id|>", message.content[0].text));
+                    }
+                    _ => panic!("unsupported role: {}", message.role),
+                }
+            }
+            prompt.push_str("<|start_header_id|>assistant<|end_header_id|>");
+            prompt
+        }
+        _ => panic!("unsupported model: {}", model),
     }
 }
