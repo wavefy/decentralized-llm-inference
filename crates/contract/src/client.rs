@@ -1,11 +1,10 @@
 use anyhow::{Context, Result};
 use aptos_sdk::{
-    bcs,
     coin_client::CoinClient,
     move_types::{
         ident_str,
         identifier::Identifier,
-        language_storage::{ModuleId, TypeTag},
+        language_storage::ModuleId,
         value::{serialize_values, MoveValue},
     },
     rest_client::{
@@ -49,14 +48,15 @@ impl OnChainClient {
         coin_client.get_account_balance(&self.account.address()).await
     }
 
-    pub async fn update_sequence_number(&self) -> Result<()> {
-        let sequence_number = self.get_sequence_number().await?;
+    pub async fn update_sequence_number(&self) -> Result<(), RestError> {
+        let sequence_number: u64 = self.get_sequence_number().await?;
         log::info!("[OnChainClient] update sequence number to {}", sequence_number);
         self.account.set_sequence_number(sequence_number);
         Ok(())
     }
 
     async fn client_send(&self, payload: TransactionPayload) -> Result<Response<Transaction>, RestError> {
+        self.update_sequence_number().await?;
         let chain_id = self.client.get_index().await.context("Failed to get chain ID")?.inner().chain_id;
         let exp_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + 30;
         let transaction = TransactionBuilder::new(payload, exp_timestamp, ChainId::new(chain_id)).max_gas_amount(100000);

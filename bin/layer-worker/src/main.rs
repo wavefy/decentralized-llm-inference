@@ -3,12 +3,15 @@ use std::str::FromStr;
 use candle_core::{DType, Device, Tensor};
 use clap::Parser;
 use contract::{
-    aptos_sdk::{rest_client::{aptos_api_types::Address, AptosBaseUrl}, types::LocalAccount},
-    client::OnChainClient,
+    aptos_sdk::{
+        rest_client::{aptos_api_types::Address, AptosBaseUrl},
+        types::LocalAccount,
+    },
+    OnChainService,
 };
 use models::{fake, get_device, llama, phi3, ModelLayersWorker};
 use tokio::signal;
-use worker::WorkerRunner;
+use worker::{WorkerEvent, WorkerEventWithResp, WorkerRunner};
 
 /// OpenAI Server for decentralized LLM
 #[derive(Parser, Debug)]
@@ -58,10 +61,8 @@ async fn main() {
 
     let account = LocalAccount::from_private_key(&args.private_key, 0).expect("Invalid private key");
     let account_address = account.address().to_string();
-    let onchain_client = OnChainClient::new(account, AptosBaseUrl::Testnet, &args.contract_address);
-    log::info!("[OpenAIServer] onchain client initialized");
-    let current_balance = onchain_client.get_current_balance().await.expect("Failed to get current balance");
-    log::info!("[OpenAIServer] current balance: {}", current_balance);
+    let mut onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, &args.contract_address);
+    onchain_service.init().await;
 
     match args.model.as_str() {
         "phi3" => {
@@ -75,7 +76,7 @@ async fn main() {
                 args.layers_from,
                 args.layers_to,
                 &account_address,
-                &onchain_client,
+                onchain_service,
             )
             .await;
         }
@@ -90,7 +91,7 @@ async fn main() {
                 args.layers_from,
                 args.layers_to,
                 &account_address,
-                &onchain_client,
+                onchain_service,
             )
             .await;
         }
@@ -105,7 +106,7 @@ async fn main() {
                 args.layers_from,
                 args.layers_to,
                 &account_address,
-                &onchain_client,
+                onchain_service,
             )
             .await;
         }
@@ -122,40 +123,45 @@ async fn run<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const
     from: u32,
     to: u32,
     address: &str,
-    onchain_client: &OnChainClient,
+    mut onchain_service: OnChainService,
 ) {
-    let (worker_event_tx, mut worker_event_rx) = tokio::sync::mpsc::channel(10);
-    let (mut worker, _virtual_layers) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, model, node_id, from..to, layers_worker, device, address, worker_event_tx).await;
+    let (mut worker, _virtual_layers, mut worker_event_rx) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, model, node_id, from..to, layers_worker, device, address).await;
+
+    tokio::spawn(async move {
+        loop {
+            match worker_event_rx.recv().await {
+                Some(WorkerEventWithResp { event, resp }) => {
+                    log::info!("[LayerWorker] WorkerEventWithResp {:?}", resp);
+                    match event {
+                        WorkerEvent::Start(chat_id, addresses) => {
+                            log::info!("[LayerWorker] WorkerEvent::Start {:?}", addresses);
+                            if let Some(resp) = resp {
+                                resp.send(true);
+                            }
+                        }
+                        WorkerEvent::Forward(chat_id) => {
+                            onchain_service.increment_chat_token_count(chat_id, 1);
+                        }
+                        WorkerEvent::End(chat_id, client_address) => {
+                            log::info!("[LayerWorker] WorkerEvent::End {:?}", client_address);
+                            let res = onchain_service.claim_tokens(chat_id, Address::from_str(&client_address).unwrap()).await;
+                            log::info!("[LayerWorker] claim_tokens {:?}", res);
+                            if let Some(resp) = resp {
+                                resp.send(res.is_ok());
+                            }
+                        }
+                    };
+                }
+                None => break,
+            }
+        }
+    });
+
     loop {
         tokio::select! {
             e = worker.recv() => match e {
                 Some(e) => {},
                 None => break,
-            },
-            e = worker_event_rx.recv() => match e {
-                Some(worker::WorkerEvent::Start(success, chat_id, addresses)) => {
-                    log::info!("[OpenAIServer] WorkerEvent::Start {:?}", addresses);
-                },
-                Some(worker::WorkerEvent::End(success, chat_id, count, client_address)) => {
-                    log::info!("[OpenAIServer] WorkerEvent::End token count: {count}");
-                    log::info!("[OpenAIServer] WorkerEvent::End client_address: {:?}", client_address);
-                    if !success {
-                        log::error!("[OpenAIServer] WorkerEvent::End failed");
-                        continue;
-                    }
-                    let onchain_session_id = onchain_client.get_session_id(Address::from_str(&client_address).unwrap().into(), chat_id).await;
-                    if let Ok(onchain_session_id) = onchain_session_id {
-                        let res = onchain_client.claim_tokens(Address::from_str(&client_address).unwrap(), onchain_session_id, count.into()).await;
-                        if let Ok(res) = res {
-                            log::info!("[OpenAIServer] token_claim success: {res:?}");
-                        } else {
-                            log::error!("[OpenAIServer] token_claim failed: {res:?}");
-                        }
-                    } else {
-                        log::error!("[OpenAIServer] get_session_id failed: {onchain_session_id:?}");
-                    }
-                },
-                _ => {},
             },
             _ = signal::ctrl_c() => {
                 worker.shutdown().await;

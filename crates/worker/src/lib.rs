@@ -9,16 +9,13 @@ use candle_core::{Device, Tensor};
 pub use communication::*;
 use model_router::RouteTable;
 use model_service::ModelService;
-pub use model_service::WorkerEvent;
+pub use model_service::{WorkerEvent, WorkerEventWithResp};
 use models::ModelLayersWorker;
 use p2p_network::addr::NodeId;
-use protocol::worker::{
-    self,
-    event::{RpcReq, RpcRes},
-};
+use protocol::worker::event::{RpcReq, RpcRes};
 use rpc::create_rpc;
 use spin::RwLock;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Receiver, Sender};
 pub use virtual_model_layers::*;
 
 #[async_trait::async_trait]
@@ -39,15 +36,15 @@ impl<const MODEL_LAYERS: usize> WorkerRunner<MODEL_LAYERS> {
         layers: LW,
         device: Device,
         address: &str,
-        worker_event_tx: Sender<WorkerEvent>,
-    ) -> (Self, VirtualModelLayers<LW, MODEL_LAYERS>) {
+    ) -> (Self, VirtualModelLayers<LW, MODEL_LAYERS>, Receiver<WorkerEventWithResp>) {
         let router = Arc::new(RwLock::new(RouteTable::new(range.clone())));
         let (rpc_client, rpc_rx) = create_rpc();
-        let model_service = Arc::new(ModelService::new(layers, device.clone(), rpc_client.clone(), router.clone(), worker_event_tx, address));
+        let (tx, mut rx) = tokio::sync::mpsc::channel(10);
+        let model_service = Arc::new(ModelService::new(layers, device.clone(), rpc_client.clone(), router.clone(), tx, address));
 
         let communication = WorkerCommunication::new(registry_endpoint, model, node_id, range, router, rpc_rx, model_service.clone()).await;
 
-        (Self { communication }, VirtualModelLayers { device, model_service })
+        (Self { communication }, VirtualModelLayers { device, model_service }, rx)
     }
 
     pub async fn shutdown(&mut self) {
