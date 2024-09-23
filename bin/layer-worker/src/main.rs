@@ -1,3 +1,5 @@
+use std::net::ToSocketAddrs;
+
 use candle_core::{DType, Device, Tensor};
 use clap::Parser;
 use models::{fake, get_device, llama, phi3, ModelLayersWorker};
@@ -11,6 +13,10 @@ struct Args {
     /// registry server
     #[arg(env, long, default_value = "ws://127.0.0.1:3000/ws")]
     registry_server: String,
+
+    /// stun server
+    #[arg(env, long, default_value = "stun.l.google.com:19302")]
+    stun_server: String,
 
     /// node id
     #[arg(env, long)]
@@ -45,15 +51,45 @@ async fn main() {
     match args.model.as_str() {
         "phi3" => {
             let layers_worker = phi3::Phi3LayersWorker::new(false, args.layers_from..args.layers_to, &device).await.unwrap();
-            run::<_, 32>(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
+            run::<_, 32>(
+                &args.registry_server,
+                device,
+                layers_worker,
+                &args.model,
+                &args.node_id,
+                args.layers_from,
+                args.layers_to,
+                &args.stun_server,
+            )
+            .await;
         }
         "llama" => {
             let layers_worker = llama::new_layers(DType::F16, device.clone(), false, args.layers_from..args.layers_to).await;
-            run::<_, 16>(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
+            run::<_, 16>(
+                &args.registry_server,
+                device,
+                layers_worker,
+                &args.model,
+                &args.node_id,
+                args.layers_from,
+                args.layers_to,
+                &args.stun_server,
+            )
+            .await;
         }
         "fake" => {
             let layers_worker = fake::FakeLayersWorker::new(args.layers_from..args.layers_to);
-            run::<_, 16>(&args.registry_server, device, layers_worker, &args.model, &args.node_id, args.layers_from, args.layers_to).await;
+            run::<_, 16>(
+                &args.registry_server,
+                device,
+                layers_worker,
+                &args.model,
+                &args.node_id,
+                args.layers_from,
+                args.layers_to,
+                &args.stun_server,
+            )
+            .await;
         }
         _ => panic!("unsupported"),
     }
@@ -67,8 +103,10 @@ async fn run<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const
     node_id: &str,
     from: u32,
     to: u32,
+    stun_server: &str,
 ) {
-    let (mut worker, _virtual_layers) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, model, node_id, from..to, layers_worker, device).await;
+    let stun_servers = stun_server.to_socket_addrs().unwrap().collect();
+    let (mut worker, _virtual_layers) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, model, node_id, from..to, layers_worker, device, stun_servers).await;
     loop {
         tokio::select! {
             e = worker.recv() => match e {

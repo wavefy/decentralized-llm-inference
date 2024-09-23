@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
 use clap::Parser;
 use openai_server::start_server;
@@ -10,6 +10,10 @@ struct Args {
     /// http bind addr
     #[arg(env, long, default_value = "127.0.0.1:18888")]
     http_bind: SocketAddr,
+
+    /// stun server
+    #[arg(env, long, default_value = "stun.l.google.com:19302")]
+    stun_server: String,
 
     /// registry server
     #[arg(env, long, default_value = "ws://127.0.0.1:3000/ws")]
@@ -43,5 +47,5 @@ async fn main() {
     }
 
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
-    start_server(&args.registry_server, &args.model, &args.node_id, args.layers_from..args.layers_to, args.http_bind).await;
+    start_server(&args.registry_server, &args.model, &args.node_id, args.layers_from..args.layers_to, args.http_bind, &args.stun_server).await;
 }

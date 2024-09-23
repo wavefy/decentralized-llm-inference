@@ -25,13 +25,16 @@ pub struct RemoteConn {
 }
 
 impl RemoteConn {
-    pub fn new(remote: NodeId, local_addrs: Vec<SocketAddr>) -> (Self, String) {
+    pub fn new(remote: NodeId, local_addrs: Vec<(SocketAddr, Option<SocketAddr>)>) -> (Self, String) {
         let rtc_config = RtcConfig::new().set_local_ice_credentials(IceCreds::new());
         let ice_ufrag = rtc_config.local_ice_credentials().as_ref().expect("should have ice credentials").ufrag.clone();
         let mut rtc = rtc_config.build();
 
-        for addr in local_addrs {
+        for (addr, mapped_addr) in local_addrs {
             rtc.add_local_candidate(Candidate::host(addr, Protocol::Udp).expect("Should create candidate"));
+            if let Some(mapped_addr) = mapped_addr {
+                rtc.add_local_candidate(Candidate::server_reflexive(mapped_addr, addr, Protocol::Udp).expect("Should create candidate"));
+            }
         }
 
         (

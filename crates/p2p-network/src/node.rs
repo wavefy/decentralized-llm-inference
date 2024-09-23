@@ -1,12 +1,18 @@
 use std::{
     collections::{HashMap, VecDeque},
+    net::SocketAddr,
     time::{Duration, Instant},
 };
 
+use local_ip_address::local_ip;
 use remote_conn::RemoteConn;
 use tokio::{net::UdpSocket, time::Interval};
 
-use crate::{addr::NodeId, shared_port::SharedUdpPort};
+use crate::{
+    addr::NodeId,
+    shared_port::SharedUdpPort,
+    stun::{get_public_ip, process_stun_response, send_stun_request},
+};
 
 mod remote_conn;
 
@@ -63,11 +69,18 @@ pub struct NetworkNode<MSG> {
     events: VecDeque<NodeEvent<MSG>>,
     shared_udp: SharedUdpPort<ConnId>,
     interval: Interval,
+    stun_servers: Vec<SocketAddr>,
+    public_addr: Option<SocketAddr>,
+    last_sent_stun: Instant,
 }
 
 impl<MSG: prost::Message + Default> NetworkNode<MSG> {
-    pub async fn new(node: NodeId) -> Self {
-        let udp = UdpSocket::bind("127.0.0.1:0").await.expect("Should listen");
+    pub async fn new(node: NodeId, stun_servers: Vec<SocketAddr>) -> Self {
+        let local_ip = local_ip().unwrap();
+        let udp = UdpSocket::bind(SocketAddr::new(local_ip, 0)).await.expect("Should listen");
+        let public_addr = get_public_ip(&udp, &stun_servers).await.ok();
+        log::info!("[NetworkNode] {node:?} local {local_ip} public {public_addr:?}");
+
         Self {
             node,
             udp,
@@ -77,6 +90,9 @@ impl<MSG: prost::Message + Default> NetworkNode<MSG> {
             events: VecDeque::new(),
             shared_udp: SharedUdpPort::default(),
             interval: tokio::time::interval(Duration::from_millis(1)),
+            stun_servers,
+            public_addr,
+            last_sent_stun: Instant::now(),
         }
     }
 
@@ -113,10 +129,11 @@ impl<MSG: prost::Message + Default> NetworkNode<MSG> {
 
     pub fn connect(&mut self, dest: NodeId) -> Option<(ConnId, String)> {
         if !self.nodes.contains_key(&dest) {
+            log::info!("[NetworkNode {:?}] connect to {dest:?}", self.node);
             let conn_id = ConnId::rand();
             self.nodes.insert(dest.clone(), conn_id);
 
-            let (mut conn, ice_ufrag) = RemoteConn::new(dest, vec![self.udp.local_addr().expect("Should have local")]);
+            let (mut conn, ice_ufrag) = RemoteConn::new(dest, vec![(self.udp.local_addr().expect("Should have local"), self.public_addr)]);
             self.shared_udp.add_ufrag(ice_ufrag, conn_id);
             let offer = conn.create_offer();
             Self::pop_conn(&conn_id, &mut conn, &self.udp, &mut self.events, &mut self.shared_udp);
@@ -132,7 +149,7 @@ impl<MSG: prost::Message + Default> NetworkNode<MSG> {
         if self.conns.contains_key(&conn_id) {
             Err(IncomingError::AlreadyHas)
         } else {
-            let (mut conn, ice_ufrag) = RemoteConn::new(from.clone(), vec![self.udp.local_addr().expect("Should have local")]);
+            let (mut conn, ice_ufrag) = RemoteConn::new(from.clone(), vec![(self.udp.local_addr().expect("Should have local"), self.public_addr)]);
             self.shared_udp.add_ufrag(ice_ufrag, conn_id);
             let answer = conn.accept_offer(offer).ok_or(IncomingError::SdpError)?;
             Self::pop_conn(&conn_id, &mut conn, &self.udp, &mut self.events, &mut self.shared_udp);
@@ -186,10 +203,28 @@ impl<MSG: prost::Message + Default> NetworkNode<MSG> {
             tokio::select! {
                 _ = self.interval.tick() => {
                     self.tick();
+                    if self.last_sent_stun.elapsed() > Duration::from_secs(10) {
+                        self.last_sent_stun = Instant::now();
+                        send_stun_request(&self.udp, &self.stun_servers).await.expect("Should send stun request");
+                    }
                 },
                 net_in = self.udp.recv_from(&mut self.udp_buf) => {
                     if let Ok((len, remote)) = net_in {
-                        log::debug!("[NetworkNode] recv {len} bytes from {remote}");
+                        if self.stun_servers.contains(&remote) {
+                            log::info!("[NetworkNode] recv stun response from {remote}");
+                            match process_stun_response(&self.udp_buf[0..len]) {
+                                Ok(public_ip) => {
+                                    log::info!("[NetworkNode] public ip {public_ip}");
+                                    self.public_addr = Some(public_ip);
+                                }
+                                Err(e) => {
+                                    log::error!("[NetworkNode] process stun response error {e:?}");
+                                }
+                            }
+                            continue;
+                        }
+
+                        log::debug!("[NetworkNode {:?}] recv {len} bytes from {remote}", self.node);
                         if let Some(conn_id) = self.shared_udp.map_remote(remote, &self.udp_buf[0..len]) {
                             if let Some(conn) = self.conns.get_mut(&conn_id) {
                                 conn.on_data(Instant::now(), remote, self.udp.local_addr().unwrap(), &self.udp_buf[0..len]);
