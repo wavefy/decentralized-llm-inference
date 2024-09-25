@@ -52,7 +52,7 @@ struct Args {
 
     /// Contract address
     #[arg(env, long, default_value = "0x9123e2561d81ba5f77473b8dc664fa75179c841061d12264508894610b9d0b7a")]
-    contract_address: String,
+    contract_address: String
 }
 
 #[tokio::main]

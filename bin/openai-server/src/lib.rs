@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, ops::Range, str::FromStr, sync::Arc};
+use std::{env, net::SocketAddr, ops::Range, str::FromStr, sync::Arc};
 
 use api::{chat_completions, get_model, list_models};
 use candle_core::DType;
@@ -70,29 +70,35 @@ async fn run<const MODEL_LAYERS: usize>(
     tokio::spawn(async move {
         loop {
             if let Some(WorkerEventWithResp { event, resp }) = worker_event_rx.recv().await {
-                match event {
-                    WorkerEvent::Start(chat_id, addresses) => {
-                        log::info!("[OpenAIServer] WorkerEvent::Start {addresses:?}");
-                        let addresses = addresses.iter().map(|a| Address::from_str(a).unwrap()).collect();
-                        let res = onchain_service.create_session(chat_id, 100, 100, addresses).await;
-                        log::info!("[OpenAIServer] create_session {res:?}");
-                        if let Some(resp) = resp {
-                            resp.send(res.is_ok());
+                if (env::var("IGNORE_CONTRACT").is_ok()) {
+                    if let Some(resp) = resp {
+                        resp.send(true);
+                    }
+                } else {
+                    match event {
+                        WorkerEvent::Start(chat_id, addresses) => {
+                            log::info!("[OpenAIServer] WorkerEvent::Start {addresses:?}");
+                            let addresses = addresses.iter().map(|a| Address::from_str(a).unwrap()).collect();
+                            let res = onchain_service.create_session(chat_id, 100, 100, addresses).await;
+                            log::info!("[OpenAIServer] create_session {res:?}");
+                            if let Some(resp) = resp {
+                                resp.send(res.is_ok());
+                            }
                         }
-                    }
-                    WorkerEvent::Forward(chat_id) => {
-                        log::info!("[OpenAIServer] WorkerEvent::Forward {chat_id}");
-                        onchain_service.increment_chat_token_count(chat_id, 1);
-                    }
-                    WorkerEvent::End(chat_id, client_address) => {
-                        log::info!("[OpenAIServer] WorkerEvent::End {client_address}");
-                        let res = onchain_service.commit_token_count(chat_id).await;
-                        log::info!("[OpenAIServer] commit_token_count {res:?}");
-                        if let Some(resp) = resp {
-                            resp.send(res.is_ok());
+                        WorkerEvent::Forward(chat_id) => {
+                            log::info!("[OpenAIServer] WorkerEvent::Forward {chat_id}");
+                            onchain_service.increment_chat_token_count(chat_id, 1);
                         }
+                        WorkerEvent::End(chat_id, client_address) => {
+                            log::info!("[OpenAIServer] WorkerEvent::End {client_address}");
+                            let res = onchain_service.commit_token_count(chat_id).await;
+                            log::info!("[OpenAIServer] commit_token_count {res:?}");
+                            if let Some(resp) = resp {
+                                resp.send(res.is_ok());
+                            }
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
         }

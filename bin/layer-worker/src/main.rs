@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{env, str::FromStr};
 
 use candle_core::{DType, Device, Tensor};
 use clap::Parser;
@@ -131,26 +131,31 @@ async fn run<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const
         loop {
             match worker_event_rx.recv().await {
                 Some(WorkerEventWithResp { event, resp }) => {
-                    log::info!("[LayerWorker] WorkerEventWithResp {:?}", resp);
-                    match event {
-                        WorkerEvent::Start(chat_id, addresses) => {
-                            log::info!("[LayerWorker] WorkerEvent::Start {:?}", addresses);
-                            if let Some(resp) = resp {
-                                resp.send(true);
+                    if env::var("IGNORE_CONTRACT").is_ok() {
+                        if let Some(resp) = resp {
+                            resp.send(true);
+                        }
+                    } else {
+                        match event {
+                            WorkerEvent::Start(chat_id, addresses) => {
+                                log::info!("[LayerWorker] WorkerEvent::Start {:?}", addresses);
+                                if let Some(resp) = resp {
+                                    resp.send(true);
+                                }
                             }
-                        }
-                        WorkerEvent::Forward(chat_id) => {
-                            onchain_service.increment_chat_token_count(chat_id, 1);
-                        }
-                        WorkerEvent::End(chat_id, client_address) => {
-                            log::info!("[LayerWorker] WorkerEvent::End {:?}", client_address);
-                            let res = onchain_service.claim_tokens(chat_id, Address::from_str(&client_address).unwrap()).await;
-                            log::info!("[LayerWorker] claim_tokens {:?}", res);
-                            if let Some(resp) = resp {
-                                resp.send(res.is_ok());
+                            WorkerEvent::Forward(chat_id) => {
+                                onchain_service.increment_chat_token_count(chat_id, 1);
                             }
-                        }
-                    };
+                            WorkerEvent::End(chat_id, client_address) => {
+                                log::info!("[LayerWorker] WorkerEvent::End {:?}", client_address);
+                                let res = onchain_service.claim_tokens(chat_id, Address::from_str(&client_address).unwrap()).await;
+                                log::info!("[LayerWorker] claim_tokens {:?}", res);
+                                if let Some(resp) = resp {
+                                    resp.send(res.is_ok());
+                                }
+                            }
+                        };
+                    }
                 }
                 None => break,
             }
