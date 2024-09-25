@@ -1,5 +1,4 @@
-use std::{env, str::FromStr};
-
+use std::{env, net::ToSocketAddrs, str::FromStr};
 use candle_core::{DType, Device, Tensor};
 use clap::Parser;
 use contract::{
@@ -20,6 +19,10 @@ struct Args {
     /// registry server
     #[arg(env, long, default_value = "ws://127.0.0.1:3000/ws")]
     registry_server: String,
+
+    /// stun server
+    #[arg(env, long, default_value = "stun.l.google.com:19302")]
+    stun_server: String,
 
     /// node id
     #[arg(env, long)]
@@ -75,6 +78,7 @@ async fn main() {
                 &args.node_id,
                 args.layers_from,
                 args.layers_to,
+                &args.stun_server,
                 &account_address,
                 onchain_service,
             )
@@ -90,6 +94,7 @@ async fn main() {
                 &args.node_id,
                 args.layers_from,
                 args.layers_to,
+                &args.stun_server,
                 &account_address,
                 onchain_service,
             )
@@ -105,6 +110,7 @@ async fn main() {
                 &args.node_id,
                 args.layers_from,
                 args.layers_to,
+                &args.stun_server,
                 &account_address,
                 onchain_service,
             )
@@ -122,10 +128,12 @@ async fn run<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const
     node_id: &str,
     from: u32,
     to: u32,
+    stun_server: &str,
     address: &str,
     mut onchain_service: OnChainService,
 ) {
-    let (mut worker, _virtual_layers, mut worker_event_rx) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, model, node_id, from..to, layers_worker, device, address).await;
+    let stun_servers = stun_server.to_socket_addrs().unwrap().collect();
+    let (mut worker, _virtual_layers, mut worker_event_rx) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, model, node_id, from..to, layers_worker, device, stun_servers, address).await;
 
     tokio::spawn(async move {
         loop {

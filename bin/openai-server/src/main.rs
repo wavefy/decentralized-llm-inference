@@ -26,6 +26,10 @@ struct Args {
     #[arg(env, long, default_value = "127.0.0.1:18888")]
     http_bind: SocketAddr,
 
+    /// stun server
+    #[arg(env, long, default_value = "stun.l.google.com:19302")]
+    stun_server: String,
+
     /// registry server
     #[arg(env, long, default_value = "ws://127.0.0.1:3000/ws")]
     registry_server: String,
@@ -52,7 +56,7 @@ struct Args {
 
     /// Contract address
     #[arg(env, long, default_value = "0x9123e2561d81ba5f77473b8dc664fa75179c841061d12264508894610b9d0b7a")]
-    contract_address: String
+    contract_address: String,
 }
 
 #[tokio::main]
@@ -72,6 +76,7 @@ async fn main() {
         &args.node_id,
         args.layers_from..args.layers_to,
         args.http_bind,
+        args.stun_server,
         &args.private_key,
         &args.contract_address,
     )

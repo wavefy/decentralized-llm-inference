@@ -1,4 +1,4 @@
-use std::{ops::Range, sync::Arc, time::Duration};
+use std::{net::SocketAddr, ops::Range, sync::Arc, time::Duration};
 
 use model_router::{RoutePath, RouteTable};
 use p2p_network::{
@@ -38,6 +38,7 @@ impl<const MODEL_LAYERS: usize> WorkerCommunication<MODEL_LAYERS> {
         router: Arc<RwLock<RouteTable<NodeId, MODEL_LAYERS>>>,
         rpc_rx: RpcClientRx,
         rpc_handler: Arc<dyn ServiceHandler<MODEL_LAYERS>>,
+        stun_servers: Vec<SocketAddr>,
     ) -> Self {
         log::info!("[WorkerComunication] start with node {node_id} with model {model}, layers [{range:?}] / total {MODEL_LAYERS}");
         let node_id = NodeId(node_id.to_string());
@@ -48,7 +49,7 @@ impl<const MODEL_LAYERS: usize> WorkerCommunication<MODEL_LAYERS> {
         Self {
             registry_client,
             router: router.clone(),
-            network: NetworkNode::new(node_id).await,
+            network: NetworkNode::new(node_id, stun_servers).await,
             ticker: tokio::time::interval(Duration::from_millis(1000)),
             res_rx,
             res_tx,

@@ -3,7 +3,7 @@ mod model_service;
 mod rpc;
 mod virtual_model_layers;
 
-use std::{ops::Range, sync::Arc};
+use std::{net::SocketAddr, ops::Range, sync::Arc};
 
 use candle_core::{Device, Tensor};
 pub use communication::*;
@@ -35,6 +35,7 @@ impl<const MODEL_LAYERS: usize> WorkerRunner<MODEL_LAYERS> {
         range: Range<u32>,
         layers: LW,
         device: Device,
+        stun_servers: Vec<SocketAddr>,
         address: &str,
     ) -> (Self, VirtualModelLayers<LW, MODEL_LAYERS>, Receiver<WorkerEventWithResp>) {
         let router = Arc::new(RwLock::new(RouteTable::new(range.clone())));
@@ -42,7 +43,7 @@ impl<const MODEL_LAYERS: usize> WorkerRunner<MODEL_LAYERS> {
         let (tx, mut rx) = tokio::sync::mpsc::channel(10);
         let model_service = Arc::new(ModelService::new(layers, device.clone(), rpc_client.clone(), router.clone(), tx, address));
 
-        let communication = WorkerCommunication::new(registry_endpoint, model, node_id, range, router, rpc_rx, model_service.clone()).await;
+        let communication = WorkerCommunication::new(registry_endpoint, model, node_id, range, router, rpc_rx, model_service.clone(), stun_servers).await;
 
         (Self { communication }, VirtualModelLayers { device, model_service }, rx)
     }
