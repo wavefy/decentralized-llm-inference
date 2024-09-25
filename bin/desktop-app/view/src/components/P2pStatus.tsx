@@ -7,7 +7,16 @@ const P2pStatusWidget: React.FC = () => {
     useEffect(() => {
         P2pStatusService.getP2pStatus().then(setP2pStatus);
         const interval = setInterval(() => {
-            P2pStatusService.getP2pStatus().then(setP2pStatus);
+            P2pStatusService.getP2pStatus().then(setP2pStatus).catch(() => {
+                setP2pStatus({
+                    balance: 0,
+                    earned: 0,
+                    spent: 0,
+                    peers: 0,
+                    sessions: 0,
+                    status: "not started"
+                });
+            });
         }, 1000);
         return () => clearInterval(interval);
     }, []);
