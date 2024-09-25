@@ -5,7 +5,7 @@ use std::{
 };
 
 use api_chat::{chat_completions, get_model, list_models};
-use api_status::{p2p_start, p2p_status, p2p_stop, P2pState};
+use api_status::{p2p_start, p2p_status, p2p_stop, p2p_suggest_layers, P2pState};
 use candle_core::DType;
 use models::{fake, get_device, llama, phi3, ChatModel};
 use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
@@ -21,6 +21,7 @@ mod api_status;
 pub async fn start_control_server(control_http_bind: SocketAddr, registry_server: &str, node_id: &str, openai_http_bind: SocketAddr, stun_server: &str) {
     let app = Route::new()
         .at("/v1/p2p/status", poem::get(p2p_status))
+        .at("/v1/p2p/suggest_layers", poem::get(p2p_suggest_layers))
         .at("/v1/p2p/start", poem::post(p2p_start))
         .at("/v1/p2p/stop", poem::post(p2p_stop))
         .data(P2pState {

@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
@@ -12,4 +14,9 @@ pub enum OfferError {}
 #[derive(Debug, PartialEq, Eq)]
 pub enum AnswerError {
     Remote(String),
+}
+
+#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelDistribution {
+    pub layers: Vec<usize>,
 }

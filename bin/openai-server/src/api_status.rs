@@ -3,9 +3,10 @@ use std::{net::SocketAddr, sync::Arc};
 use poem::{
     handler,
     http::StatusCode,
-    web::{Data, Json},
+    web::{Data, Json, Query},
     Body, Response,
 };
+use registry::client::{get_layers_distribution, select_layers, LayerSelectionRes};
 use serde::{Deserialize, Serialize};
 use tokio::{
     sync::{
@@ -130,6 +131,7 @@ pub async fn p2p_start(body: Json<P2pStart>, data: Data<&P2pState>) -> Response 
     *current_model = Some(model);
     Response::builder().status(StatusCode::OK).body(Body::from_json(&P2pStartRes {}).unwrap())
 }
+
 #[derive(Debug, Serialize)]
 struct P2pStopRes {}
 
@@ -142,5 +144,55 @@ pub async fn p2p_stop(data: Data<&P2pState>) -> Response {
         Response::builder().status(StatusCode::OK).body(Body::from_json(&P2pStopRes {}).unwrap())
     } else {
         return Response::builder().status(StatusCode::BAD_REQUEST).body(Body::from_string("Model not started".to_string()));
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct P2pSuggestLayersRes {
+    distribution: Vec<usize>,
+    min_layers: Option<u32>,
+    from_layer: Option<u32>,
+    to_layer: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+struct P2pSuggestLayers {
+    model: String,
+    layers: u32,
+    max_layers: u32,
+}
+
+#[handler]
+pub async fn p2p_suggest_layers(query: Query<P2pSuggestLayers>, data: Data<&P2pState>) -> Response {
+    log::info!("[OpenAIServer] p2p_suggest_layers model: {}, layers: {}, max_layers: {}", query.model, query.layers, query.max_layers);
+    match get_layers_distribution(&data.registry_server, &query.model).await {
+        Ok(mut distrbution) => {
+            while distrbution.layers.len() < query.max_layers as usize {
+                distrbution.layers.push(0);
+            }
+            log::info!("distrbution: {} {}", distrbution.layers.len(), query.max_layers);
+            let selected_layers = select_layers(&distrbution.layers, query.layers);
+
+            Response::builder().status(StatusCode::OK).body(match selected_layers {
+                LayerSelectionRes::EnoughLayers { ranges } => Body::from_json(&P2pSuggestLayersRes {
+                    distribution: distrbution.layers,
+                    min_layers: None,
+                    from_layer: Some(ranges.start),
+                    to_layer: Some(ranges.end),
+                })
+                .unwrap(),
+                LayerSelectionRes::NotEnoughLayers { min_layers } => Body::from_json(&P2pSuggestLayersRes {
+                    distribution: distrbution.layers,
+                    min_layers: Some(min_layers),
+                    from_layer: None,
+                    to_layer: None,
+                })
+                .unwrap(),
+            })
+        }
+        Err(err) => {
+            log::error!("Failed to get layers distribution: {}", err);
+            Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::from_string(err))
+        }
     }
 }

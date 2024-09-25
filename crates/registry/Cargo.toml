@@ -12,12 +12,15 @@ async-trait = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 poem = { workspace = true, optional = true }
 
+reqwest = { workspace = true, optional = true, features = ["json"] }
 tokio-tungstenite = { workspace = true, optional = true }
 
 futures-util = { workspace = true }
 prost = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [features]
 default = ["client", "server"]
-client = ["tokio-tungstenite"]
+client = ["tokio-tungstenite", "reqwest"]
 server = ["poem/websocket"]
