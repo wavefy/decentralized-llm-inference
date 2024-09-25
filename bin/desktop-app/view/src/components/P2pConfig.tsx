@@ -17,6 +17,7 @@ const P2pConfigWidget: React.FC = () => {
     const [selectedModel, setSelectedModel] = useState<string>('');
     const [startLayer, setStartLayer] = useState<number>(0);
     const [endLayer, setEndLayer] = useState<number>(0);
+    const [privateKey, setPrivateKey] = useState<string>('0x0');
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -38,6 +39,7 @@ const P2pConfigWidget: React.FC = () => {
                 model: selectedModel,
                 from_layer: startLayer,
                 to_layer: endLayer,
+                private_key: privateKey
             });
             P2pStatusService.getP2pStatus().then(setStatus);
         } catch (err) {
@@ -125,6 +127,18 @@ const P2pConfigWidget: React.FC = () => {
                                             className="bg-gray-600 text-white p-2 rounded-md w-full border border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         />
                                     </div>
+
+
+                                </div>
+                                <div className="w-full ">
+                                    <label htmlFor="privateKey" className="block mb-1 text-sm">Private Key</label>
+                                    <input
+                                        id="privateKey"
+                                        type="text"
+                                        value={privateKey}
+                                        onChange={(e) => setPrivateKey(e.target.value)}
+                                        className="bg-gray-600 text-white p-2 rounded-md w-full border border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
                                 </div>
                             </div>
                         </>

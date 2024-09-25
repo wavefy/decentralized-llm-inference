@@ -20,7 +20,7 @@ use models::{fake, get_device, llama, phi3, ChatModel};
 use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
 use tokio::{
     signal,
-    sync::mpsc::{channel, Receiver},
+    sync::{mpsc::{channel, Receiver}, oneshot, Mutex},
 };
 use usage_service::WorkerUsageService;
 use worker::{WorkerEvent, WorkerEventWithResp, WorkerRunner};

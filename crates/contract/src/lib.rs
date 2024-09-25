@@ -8,6 +8,8 @@ use protocol::llm::{EndReq, EndRes, ForwardReq, ForwardRes, StartReq, StartRes};
 use tokio::sync::RwLock;
 use usage_service::WorkerUsageService;
 
+pub const CONTRACT_ADDRESS: &str = "0x9123e2561d81ba5f77473b8dc664fa75179c841061d12264508894610b9d0b7a";
+
 pub enum OnChainReq {
     ClientCreateSession(u64, u64, u64, Vec<Address>),
     ClientCommitTokenCount(u64),
@@ -20,8 +22,8 @@ pub struct OnChainService {
 }
 
 impl OnChainService {
-    pub fn new(account: aptos_sdk::types::LocalAccount, chain: aptos_sdk::rest_client::AptosBaseUrl, contract_address: &str) -> Self {
-        let client = client::OnChainClient::new(account, chain, contract_address);
+    pub fn new(account: aptos_sdk::types::LocalAccount, chain: aptos_sdk::rest_client::AptosBaseUrl) -> Self {
+        let client = client::OnChainClient::new(account, chain, CONTRACT_ADDRESS);
         let storage = RwLock::new(storage::OnChainStorage::new());
         Self { client, storage }
     }

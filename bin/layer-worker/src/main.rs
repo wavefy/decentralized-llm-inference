@@ -1,17 +1,14 @@
 use candle_core::{DType, Device, Tensor};
 use clap::Parser;
 use contract::{
-    aptos_sdk::{
-        rest_client::{aptos_api_types::Address, AptosBaseUrl},
-        types::LocalAccount,
-    },
+    aptos_sdk::{rest_client::AptosBaseUrl, types::LocalAccount},
     OnChainService,
 };
 use models::{fake, get_device, llama, phi3, ModelLayersWorker};
-use usage_service::WorkerUsageService;
-use std::{env, net::ToSocketAddrs, str::FromStr, sync::Arc};
+use std::{net::ToSocketAddrs, sync::Arc};
 use tokio::signal;
-use worker::{WorkerEvent, WorkerEventWithResp, WorkerRunner};
+use usage_service::WorkerUsageService;
+use worker::WorkerRunner;
 
 /// OpenAI Server for decentralized LLM
 #[derive(Parser, Debug)]
@@ -64,7 +61,7 @@ async fn main() {
     let device = get_device(false).unwrap();
 
     let account = LocalAccount::from_private_key(&args.private_key, 0).expect("Invalid private key");
-    let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, &args.contract_address);
+    let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet);
     onchain_service.init().await;
     let usage_service = Arc::new(onchain_service);
 

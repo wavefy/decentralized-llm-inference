@@ -3037,6 +3037,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tokio",
+ "utils",
 ]
 
 [[package]]
@@ -6652,6 +6653,7 @@ dependencies = [
  "tokio",
  "tracing-subscriber 0.3.18",
  "usage-service",
+ "utils",
  "worker",
 ]
 

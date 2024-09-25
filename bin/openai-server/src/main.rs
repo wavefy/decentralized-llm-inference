@@ -1,9 +1,11 @@
 use clap::Parser;
 use contract::{
     aptos_sdk::{rest_client::AptosBaseUrl, types::LocalAccount},
-    OnChainService,
+    OnChainService, CONTRACT_ADDRESS,
 };
-use openai_server::start_server;
+use openai_server::{start_control_server, start_server};
+use tokio::sync::mpsc::channel;
+use utils::random_node_id;
 use std::{net::SocketAddr, sync::Arc};
 
 /// OpenAI Server for decentralized LLM
@@ -45,10 +47,6 @@ struct Args {
     /// Private key
     #[arg(env, long)]
     private_key: Option<String>,
-
-    /// Contract address
-    #[arg(env, long)]
-    contract_address: Option<String>,
 }
 
 #[tokio::main]
@@ -67,15 +65,15 @@ async fn main() {
     if let Some(model) = args.model {
         let layers_from = args.layers_from.unwrap_or(0);
         let layers_to = args.layers_to.unwrap_or(0);
-         let account = LocalAccount::from_private_key(&args.private_key.unwrap(), 0).expect("Invalid private key");
-        let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, &args.contract_address.unwrap());
+        let account = LocalAccount::from_private_key(&args.private_key.unwrap(), 0).expect("Invalid private key");
+        let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet);
         onchain_service.init().await;
 
         let usage_service = Arc::new(onchain_service);
 
         tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
         let (_query_tx, query_rx) = channel(10);
-        start_server(&args.registry_server, &model, &node_id, layers_from..layers_to, args.http_bind, &args.stun_server, query_rx).await;
+        start_server(&args.registry_server, &model, &node_id, layers_from..layers_to, args.http_bind, &args.stun_server, query_rx, usage_service).await;
     } else {
         start_control_server(args.control_bind, &args.registry_server, &node_id, args.http_bind, &args.stun_server).await;
     }
