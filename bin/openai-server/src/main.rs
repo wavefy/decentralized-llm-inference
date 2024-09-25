@@ -10,6 +10,10 @@ use std::{net::SocketAddr, sync::Arc};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
+    /// status bind addr
+    #[arg(env, long, default_value = "127.0.0.1:18889")]
+    control_bind: SocketAddr,
+
     /// http bind addr
     #[arg(env, long, default_value = "127.0.0.1:18888")]
     http_bind: SocketAddr,
@@ -24,27 +28,27 @@ struct Args {
 
     /// node id
     #[arg(env, long)]
-    node_id: String,
+    node_id: Option<String>,
 
     /// model id
-    #[arg(env, long, default_value = "phi3")]
-    model: String,
+    #[arg(env, long)]
+    model: Option<String>,
 
     /// model layers, layer 0 is embeding work, from 1 is for matrix jobs
     #[arg(env, long)]
-    layers_from: u32,
+    layers_from: Option<u32>,
 
     /// model layers, layer 0 is embeding work, from 1 is for matrix jobs
     #[arg(env, long)]
-    layers_to: u32,
+    layers_to: Option<u32>,
 
     /// Private key
-    #[arg(env, long, default_value = "0x3bba41ade33b801bf3e42a080a699e73654eaf1775fb0afc5d65f5449e55d74b")]
-    private_key: String,
+    #[arg(env, long)]
+    private_key: Option<String>,
 
     /// Contract address
-    #[arg(env, long, default_value = "0x9123e2561d81ba5f77473b8dc664fa75179c841061d12264508894610b9d0b7a")]
-    contract_address: String,
+    #[arg(env, long)]
+    contract_address: Option<String>,
 }
 
 #[tokio::main]
@@ -57,21 +61,22 @@ async fn main() {
         env::set_var("RUST_LOG", "info,str0m=warn");
     }
 
-    let account = LocalAccount::from_private_key(&args.private_key, 0).expect("Invalid private key");
-    let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, &args.contract_address);
-    onchain_service.init().await;
-
-    let usage_service = Arc::new(onchain_service);
+    let node_id = args.node_id.unwrap_or_else(random_node_id);
 
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
-    start_server(
-        &args.registry_server,
-        &args.model,
-        &args.node_id,
-        args.layers_from..args.layers_to,
-        args.http_bind,
-        &args.stun_server,
-        usage_service,
-    )
-    .await;
+    if let Some(model) = args.model {
+        let layers_from = args.layers_from.unwrap_or(0);
+        let layers_to = args.layers_to.unwrap_or(0);
+         let account = LocalAccount::from_private_key(&args.private_key.unwrap(), 0).expect("Invalid private key");
+        let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, &args.contract_address.unwrap());
+        onchain_service.init().await;
+
+        let usage_service = Arc::new(onchain_service);
+
+        tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
+        let (_query_tx, query_rx) = channel(10);
+        start_server(&args.registry_server, &model, &node_id, layers_from..layers_to, args.http_bind, &args.stun_server, query_rx).await;
+    } else {
+        start_control_server(args.control_bind, &args.registry_server, &node_id, args.http_bind, &args.stun_server).await;
+    }
 }

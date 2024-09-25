@@ -21,6 +21,7 @@ pub use virtual_model_layers::*;
 
 #[async_trait::async_trait]
 pub trait ServiceHandler<const MODEL_LAYERS: usize>: Send + Sync + 'static {
+    fn sessions(&self) -> Vec<u64>;
     async fn on_req(&self, from: NodeId, req: RpcReq) -> RpcRes;
 }
 
@@ -44,6 +45,18 @@ impl<const MODEL_LAYERS: usize> WorkerRunner<MODEL_LAYERS> {
         let model_service = Arc::new(ModelService::new(layers, device.clone(), rpc_client.clone(), router.clone(), usage_service));
         let communication = WorkerCommunication::new(registry_endpoint, model, node_id, range, router, rpc_rx, model_service.clone(), stun_servers).await;
         (Self { communication }, VirtualModelLayers { device, model_service })
+    }
+
+    pub fn ready(&self) -> bool {
+        self.communication.ready()
+    }
+
+    pub fn peers(&self) -> Vec<NodeId> {
+        self.communication.peers()
+    }
+
+    pub fn sessions(&self) -> Vec<u64> {
+        self.communication.sessions()
     }
 
     pub async fn shutdown(&mut self) {

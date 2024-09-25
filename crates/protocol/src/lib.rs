@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::ops::Deref;
 use model_router::{LayerRemoteInfo, RouteSync};
 
 pub mod registry {
@@ -24,6 +25,14 @@ impl Session {
 impl Display for Session {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Session({})", self.0)
+    }
+}
+
+impl Deref for Session {
+    type Target = u64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 

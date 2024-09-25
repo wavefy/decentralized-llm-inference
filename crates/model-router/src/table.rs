@@ -73,6 +73,10 @@ impl<Node: Clone + Debug + Eq + Hash, const MODEL_LAYERS: usize> RouteTable<Node
         }
     }
 
+    pub fn ready(&self) -> bool {
+        self.select_next(0).is_some()
+    }
+
     pub fn on_tick(&mut self, now_ms: u64) {
         for (layer, route) in self.remote_layers.iter_mut().enumerate() {
             let pre = route.remotes.len();

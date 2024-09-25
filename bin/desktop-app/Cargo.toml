@@ -10,6 +10,7 @@ rust-version = "1.60"
 tauri-build = { version = "1.5.3", features = [] }
 
 [dependencies]
+utils = { path = "../../crates/utils", version = "0.1.0" }
 openai-server = { path = "../openai-server" }
 serde_json = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

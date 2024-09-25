@@ -58,6 +58,18 @@ impl<const MODEL_LAYERS: usize> WorkerCommunication<MODEL_LAYERS> {
         }
     }
 
+    pub fn ready(&self) -> bool {
+        self.router.read().ready()
+    }
+
+    pub fn peers(&self) -> Vec<NodeId> {
+        self.network.peers()
+    }
+
+    pub fn sessions(&self) -> Vec<u64> {
+        self.rpc_handler.sessions()
+    }
+
     pub fn send_to(&mut self, dest: NodeId, msg: &protocol::worker::Event) -> Result<(), SendError> {
         self.network.send(dest, msg)?;
         Ok(())

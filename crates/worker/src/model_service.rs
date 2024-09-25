@@ -61,6 +61,10 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
 
 #[async_trait::async_trait]
 impl<LW: ModelLayersWorker<(Tensor, u32)>, const MODEL_LAYERS: usize> ServiceHandler<MODEL_LAYERS> for ModelService<LW, MODEL_LAYERS> {
+    fn sessions(&self) -> Vec<u64> {
+        self.sessions.read().keys().cloned().into_iter().map(|s| *s).collect()
+    }
+
     async fn on_req(&self, _from: NodeId, req: RpcReq) -> RpcRes {
         match req.cmd.as_str() {
             "START" => {
