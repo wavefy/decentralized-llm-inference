@@ -141,11 +141,16 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
                 _ => (),
             }
             if let Some(t) = tokenizer.next_token(next_token)? {
-                tx.send(t).await.unwrap();
+                if let Err(e) = tx.send(t).await {
+                    log::error!("error sending message: {}", e);
+                    break;
+                }
             }
         }
         if let Some(rest) = tokenizer.decode_rest().unwrap() {
-            tx.send(rest).await.unwrap();
+            if let Err(e) = tx.send(rest).await {
+                log::error!("error sending message: {}", e);
+            }
         }
         let dt = start_gen.elapsed();
         println!("\n\n{} tokens generated ({} token/s)\n", token_generated, (token_generated - 1) as f64 / dt.as_secs_f64(),);

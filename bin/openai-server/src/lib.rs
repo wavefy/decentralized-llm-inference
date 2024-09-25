@@ -72,6 +72,7 @@ pub struct WorkerStatus {
 
 pub enum WorkerControl {
     Status(oneshot::Sender<WorkerStatus>),
+    Stop(oneshot::Sender<()>),
 }
 
 async fn run<const MODEL_LAYERS: usize>(worker: &mut WorkerRunner<MODEL_LAYERS>, model_exe: Arc<dyn ChatModel>, http_bind: SocketAddr, mut query_rx: Receiver<WorkerControl>) {
@@ -81,7 +82,7 @@ async fn run<const MODEL_LAYERS: usize>(worker: &mut WorkerRunner<MODEL_LAYERS>,
         .at("/v1/models/:model_id", poem::get(get_model))
         .with(Cors::new());
 
-    tokio::spawn(async move { Server::new(TcpListener::bind(http_bind)).run(app).await });
+    let http_server = tokio::spawn(async move { Server::new(TcpListener::bind(http_bind)).run(app).await });
 
     loop {
         tokio::select! {
@@ -99,6 +100,11 @@ async fn run<const MODEL_LAYERS: usize>(worker: &mut WorkerRunner<MODEL_LAYERS>,
                         peers: worker.peers().iter().map(|p| p.to_string()).collect::<Vec<_>>(),
                         sessions: worker.sessions(),
                     }).unwrap();
+                }
+                Some(WorkerControl::Stop(sender)) => {
+                    sender.send(()).unwrap();
+                    http_server.abort();
+                    break;
                 }
                 None => {
                     log::error!("[OpenAIServer] query rx closed");
