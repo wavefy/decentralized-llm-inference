@@ -11,7 +11,8 @@ members = [
     "crates/openai-protocol",
     "crates/protocol",
     "crates/registry",
-    "crates/worker"
+    "crates/worker",
+    "crates/utils"
 ]
 
 [workspace.dependencies]

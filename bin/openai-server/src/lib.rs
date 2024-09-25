@@ -4,14 +4,33 @@ use std::{
     sync::Arc,
 };
 
-use api::{chat_completions, get_model, list_models};
+use api_chat::{chat_completions, get_model, list_models};
+use api_status::{p2p_start, p2p_status, p2p_stop, P2pState};
 use candle_core::DType;
 use models::{fake, get_device, llama, phi3, ChatModel};
 use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
-use tokio::signal;
+use tokio::{signal, sync::Mutex};
 use worker::WorkerRunner;
 
-mod api;
+mod api_chat;
+mod api_status;
+
+pub async fn start_control_server(control_http_bind: SocketAddr, registry_server: &str, node_id: &str, openai_http_bind: SocketAddr, stun_server: &str) {
+    let app = Route::new()
+        .at("/v1/p2p/status", poem::get(p2p_status))
+        .at("/v1/p2p/start", poem::post(p2p_start))
+        .at("/v1/p2p/stop", poem::post(p2p_stop))
+        .data(P2pState {
+            registry_server: registry_server.to_string(),
+            node_id: node_id.to_string(),
+            http_bind: openai_http_bind,
+            stun_server: stun_server.to_string(),
+            model: Arc::new(Mutex::new(None)),
+        })
+        .with(Cors::new());
+
+    Server::new(TcpListener::bind(control_http_bind)).run(app).await.unwrap();
+}
 
 pub async fn start_server(registry_server: &str, model: &str, node_id: &str, layers: Range<u32>, http_bind: SocketAddr, stun_server: &str) {
     let stun_servers = stun_server.to_socket_addrs().unwrap().collect::<Vec<_>>();
@@ -49,19 +68,21 @@ async fn run<const MODEL_LAYERS: usize>(worker: &mut WorkerRunner<MODEL_LAYERS>,
 
     tokio::spawn(async move { Server::new(TcpListener::bind(http_bind)).run(app).await });
 
-    loop {
-        tokio::select! {
-            e = worker.recv() => match e {
-                Some(_e) => {},
-                None => {
-                    log::error!("[OpenAIServer] worker closed");
-                    break;
-                },
-            },
-            _ = signal::ctrl_c() => {
-                worker.shutdown().await;
-                break;
-            },
-        }
-    }
+    // TODO: current enable this will cause cannot stop server
+    // loop {
+    //     tokio::select! {
+    //         e = worker.recv() => match e {
+    //             Some(_e) => {},
+    //             None => {
+    //                 log::error!("[OpenAIServer] worker closed");
+    //                 break;
+    //             },
+    //         },
+    //         _ = signal::ctrl_c() => {
+    //             worker.shutdown().await;
+    //             break;
+    //         },
+    //     }
+    // }
+    while let Some(_) = worker.recv().await {}
 }

@@ -16,14 +16,14 @@ import {
   SNIPPET_MARKERS,
   TEXT_MIME_TYPES
 } from '../constants/appConstants';
-import {SubmitButton} from "./SubmitButton";
-import {useTranslation} from 'react-i18next';
-import {ChatService} from "../service/ChatService";
-import {PaperClipIcon, StopCircleIcon} from "@heroicons/react/24/outline";
+import { SubmitButton } from "./SubmitButton";
+import { useTranslation } from 'react-i18next';
+import { ChatService } from "../service/ChatService";
+import { PaperClipIcon, StopCircleIcon } from "@heroicons/react/24/outline";
 import Tooltip from "./Tooltip";
 import FileDataPreview from './FileDataPreview';
-import {FileDataRef} from '../models/FileData';
-import {preprocessImage} from '../utils/ImageUtils';
+import { FileDataRef } from '../models/FileData';
+import { preprocessImage } from '../utils/ImageUtils';
 
 interface MessageBoxProps {
   callApp: Function;
@@ -44,8 +44,8 @@ export interface MessageBoxHandles {
 
 const MessageBox =
   forwardRef<MessageBoxHandles, MessageBoxProps>(
-    ({loading, setLoading, callApp, allowImageAttachment}, ref) => {
-      const {t} = useTranslation();
+    ({ loading, setLoading, callApp, allowImageAttachment }, ref) => {
+      const { t } = useTranslation();
       const textValue = useRef('');
       const [isTextEmpty, setIsTextEmpty] = useState(true);
       const textAreaRef = useRef<HTMLTextAreaElement>(null);
@@ -369,13 +369,13 @@ const MessageBox =
 
       return (
         <div
-          style={{position: "sticky"}}
+          style={{ position: "sticky" }}
           className="absolute bottom-0 left-0 w-full border-t md:border-t-0 dark:border-white/20 md:border-transparent md:dark:border-transparent bg-white dark:bg-gray-900 md:!bg-transparent pt-2">
           <form onSubmit={handleSubmit}
-                className="stretch mx-2 flex flex-row gap-3 last:mb-2 md:mx-4 md:last:mb-6 lg:mx-auto md:max-w-2xl lg:max-w-3xl xl:max-w-4xl 2xl:max-w-5xl 3xl:max-w-6xl 4xl:max-w7xl">
+            className="stretch mx-2 flex flex-row gap-3 last:mb-2 md:mx-4 md:last:mb-6 lg:mx-auto md:max-w-2xl lg:max-w-3xl xl:max-w-4xl 2xl:max-w-5xl 3xl:max-w-6xl 4xl:max-w7xl">
             <div id="message-box-border"
-                 style={{borderRadius: "1rem"}}
-                 className="relative flex flex-col h-full flex-1 w-full py-2 flex-grow md:py-3 bg-white dark:bg-gray-850
+              style={{ borderRadius: "1rem" }}
+              className="relative flex flex-col h-full flex-1 w-full py-2 flex-grow md:py-3 bg-white dark:bg-gray-850
                dark:text-white dark:bg-gray-850 border border-black/10 dark:border-gray-900/50
                focus-within:border-black/30 dark:focus-within:border-gray-500/50"
             >
@@ -383,19 +383,19 @@ const MessageBox =
               {fileDataRef.length > 0 && (
                 <div className="w-full">
                   <FileDataPreview fileDataRef={fileDataRef} removeFileData={handleRemoveFileData}
-                                   allowImageAttachment={allowImageAttachment == 'yes'}/>
+                    allowImageAttachment={allowImageAttachment == 'yes'} />
                 </div>
               )}
               {/* Container for Textarea and Buttons */}
               <div className="flex items-center w-full relative space-x-2">
                 {/* Attachment Button */}
-                <div className="flex items-center justify-start">
+                {/* <div className="flex items-center justify-start">
                   <button
                     onClick={(e) => handleAttachment(e)}
                     className="p-1 relative z-10">
-                    <PaperClipIcon className="h-6 w-6"/>
+                    <PaperClipIcon className="h-6 w-6" />
                   </button>
-                </div>
+                </div> */}
 
                 {/* Grammarly extension container */}
                 <div className="flex items-center " style={{ flexShrink: 0, minWidth: 'fit-content' }}>
@@ -424,7 +424,7 @@ const MessageBox =
                       <button
                         onClick={(e) => handleCancel(e)}
                         className="p-1">
-                        <StopCircleIcon className="h-6 w-6"/>
+                        <StopCircleIcon className="h-6 w-6" />
                       </button>
                     </Tooltip>
                   ) : (

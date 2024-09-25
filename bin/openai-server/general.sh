@@ -1,0 +1,1 @@
+cargo run --release --features metal -- --http-bind 127.0.0.1:18888 --control-bind 127.0.0.1:28888 --registry-server ws://127.0.0.1:3000/ws
