@@ -105,6 +105,10 @@ impl<MSG: prost::Message + Default> NetworkNode<MSG> {
         }
     }
 
+    pub fn peers(&self) -> Vec<NodeId> {
+        self.nodes.keys().cloned().collect()
+    }
+
     pub fn send(&mut self, node: NodeId, data: &MSG) -> Result<usize, SendError> {
         let buf = data.encode_to_vec();
         let conn_id = self.nodes.get(&node).ok_or(SendError::NoNode)?;

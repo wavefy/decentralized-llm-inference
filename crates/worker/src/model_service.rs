@@ -43,6 +43,10 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
 
 #[async_trait::async_trait]
 impl<LW: ModelLayersWorker<(Tensor, u32)>, const MODEL_LAYERS: usize> ServiceHandler<MODEL_LAYERS> for ModelService<LW, MODEL_LAYERS> {
+    fn sessions(&self) -> Vec<u64> {
+        self.sessions.read().keys().cloned().into_iter().map(|s| *s).collect()
+    }
+
     async fn on_req(&self, _from: NodeId, req: RpcReq) -> RpcRes {
         match req.cmd.as_str() {
             "START" => {
@@ -145,7 +149,12 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
             };
 
             let res = if let Some((dest, remote_session)) = &container.remote {
-                log::info!("[ModelService] session {} forward step {} remote {dest:?} with remote session {}", req.session, req.step, remote_session.0);
+                log::info!(
+                    "[ModelService] session {} forward step {} remote {dest:?} with remote session {}",
+                    req.session,
+                    req.step,
+                    remote_session.0
+                );
                 let res = self
                     .rpc
                     .request(
@@ -161,7 +170,12 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
                     )
                     .await
                     .unwrap_or(ForwardRes { success: false, ..Default::default() });
-                log::info!("[ModelService] session {} forward step {} remote {dest:?} with remote session {} done", req.session, req.step, remote_session.0);
+                log::info!(
+                    "[ModelService] session {} forward step {} remote {dest:?} with remote session {} done",
+                    req.session,
+                    req.step,
+                    remote_session.0
+                );
                 res
             } else {
                 ForwardRes { success: true, embedding }
