@@ -12,7 +12,8 @@ members = [
     "crates/protocol",
     "crates/registry",
     "crates/worker",
-    "crates/contract"
+    "crates/contract",
+    "crates/usage-service",
 ]
 
 [workspace.dependencies]

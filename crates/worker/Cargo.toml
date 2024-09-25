@@ -13,5 +13,6 @@ model-router = { path = "../model-router", version = "0.1.0" }
 protocol = { path = "../protocol", version = "0.1.0" }
 p2p-network = { path = "../p2p-network", version = "0.1.0", features = ["full"] }
 registry = { path = "../registry", version = "0.1.0", default-features = false, features = ["client"] }
+usage-service = { path = "../usage-service", version = "0.1.0" }
 prost = { workspace = true }
 spin = { workspace = true }

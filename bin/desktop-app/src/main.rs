@@ -62,17 +62,7 @@ async fn main() {
             // let window = app.get_window("main").unwrap();
             // window.open_devtools();
             tauri::async_runtime::spawn(async move {
-                start_server(
-                    &args.registry_server,
-                    &args.model,
-                    &args.node_id,
-                    args.layers_from..args.layers_to,
-                    args.http_bind,
-                    &args.stun_server,
-                    &args.private_key,
-                    &args.contract_address,
-                )
-                .await;
+                // start_server(&args.registry_server, &args.model, &args.node_id, args.layers_from..args.layers_to, args.http_bind, &args.stun_server).await;
             });
             Ok(())
         })

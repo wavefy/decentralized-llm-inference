@@ -55,7 +55,7 @@ impl LayerWeights {
         let k = self.apply_rotary_emb(&k, index_pos)?;
 
         let (k, v) = kv_cache.append(&k.contiguous()?, &v.contiguous()?)?;
-        log::info!("[LayerWeights] add tensor to kv_cache => {:?} {:?}", k.shape(), v.shape());
+        // log::info!("[LayerWeights] add tensor to kv_cache => {:?} {:?}", k.shape(), v.shape());
 
         let k = crate::utils::repeat_kv(k, self.n_head / self.n_kv_head)?;
         let v = crate::utils::repeat_kv(v, self.n_head / self.n_kv_head)?;

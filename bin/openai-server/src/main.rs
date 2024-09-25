@@ -1,22 +1,10 @@
-use std::{net::SocketAddr, sync::Arc};
-
 use clap::Parser;
 use contract::{
-    aptos_sdk::{
-        rest_client::{AptosBaseUrl, Client},
-        types::LocalAccount,
-    },
-    client::OnChainClient,
+    aptos_sdk::{rest_client::AptosBaseUrl, types::LocalAccount},
+    OnChainService,
 };
-use models::{get_device, llama, phi3, ChatCfg, ChatModel};
 use openai_server::start_server;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
-    signal,
-    sync::mpsc::channel,
-};
-use worker::WorkerRunner;
+use std::{net::SocketAddr, sync::Arc};
 
 /// OpenAI Server for decentralized LLM
 #[derive(Parser, Debug)]
@@ -69,6 +57,12 @@ async fn main() {
         env::set_var("RUST_LOG", "info,str0m=warn");
     }
 
+    let account = LocalAccount::from_private_key(&args.private_key, 0).expect("Invalid private key");
+    let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, &args.contract_address);
+    onchain_service.init().await;
+
+    let usage_service = Arc::new(onchain_service);
+
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
     start_server(
         &args.registry_server,
@@ -76,9 +70,8 @@ async fn main() {
         &args.node_id,
         args.layers_from..args.layers_to,
         args.http_bind,
-        args.stun_server,
-        &args.private_key,
-        &args.contract_address,
+        &args.stun_server,
+        usage_service,
     )
     .await;
 }

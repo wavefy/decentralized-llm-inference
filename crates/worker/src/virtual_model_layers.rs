@@ -22,6 +22,8 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
                 session: session.0,
                 chat_id: session.0,
                 from_layer: 0,
+                metadata: vec![],
+                chain_index: 0,
             })
             .await;
     }
@@ -36,6 +38,8 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
                 step,
                 seq_len,
                 index_pos,
+                metadata: vec![],
+                chain_index: 0,
             })
             .await;
         if res.success {
@@ -51,7 +55,8 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
             .end(
                 EndReq {
                     session: session.0,
-                    client_address: "0x0".to_string(),
+                    metadata: vec![],
+                    chain_index: 0,
                 },
                 true,
             )

@@ -1,4 +1,3 @@
-use std::{env, net::ToSocketAddrs, str::FromStr};
 use candle_core::{DType, Device, Tensor};
 use clap::Parser;
 use contract::{
@@ -9,6 +8,8 @@ use contract::{
     OnChainService,
 };
 use models::{fake, get_device, llama, phi3, ModelLayersWorker};
+use usage_service::WorkerUsageService;
+use std::{env, net::ToSocketAddrs, str::FromStr, sync::Arc};
 use tokio::signal;
 use worker::{WorkerEvent, WorkerEventWithResp, WorkerRunner};
 
@@ -63,9 +64,9 @@ async fn main() {
     let device = get_device(false).unwrap();
 
     let account = LocalAccount::from_private_key(&args.private_key, 0).expect("Invalid private key");
-    let account_address = account.address().to_string();
-    let mut onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, &args.contract_address);
+    let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, &args.contract_address);
     onchain_service.init().await;
+    let usage_service = Arc::new(onchain_service);
 
     match args.model.as_str() {
         "phi3" => {
@@ -79,8 +80,7 @@ async fn main() {
                 args.layers_from,
                 args.layers_to,
                 &args.stun_server,
-                &account_address,
-                onchain_service,
+                usage_service,
             )
             .await;
         }
@@ -95,8 +95,7 @@ async fn main() {
                 args.layers_from,
                 args.layers_to,
                 &args.stun_server,
-                &account_address,
-                onchain_service,
+                usage_service,
             )
             .await;
         }
@@ -111,8 +110,7 @@ async fn main() {
                 args.layers_from,
                 args.layers_to,
                 &args.stun_server,
-                &account_address,
-                onchain_service,
+                usage_service,
             )
             .await;
         }
@@ -129,46 +127,10 @@ async fn run<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const
     from: u32,
     to: u32,
     stun_server: &str,
-    address: &str,
-    mut onchain_service: OnChainService,
+    usage_service: Arc<dyn WorkerUsageService>,
 ) {
     let stun_servers = stun_server.to_socket_addrs().unwrap().collect();
-    let (mut worker, _virtual_layers, mut worker_event_rx) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, model, node_id, from..to, layers_worker, device, stun_servers, address).await;
-
-    tokio::spawn(async move {
-        loop {
-            match worker_event_rx.recv().await {
-                Some(WorkerEventWithResp { event, resp }) => {
-                    if env::var("IGNORE_CONTRACT").is_ok() {
-                        if let Some(resp) = resp {
-                            resp.send(true);
-                        }
-                    } else {
-                        match event {
-                            WorkerEvent::Start(chat_id, addresses) => {
-                                log::info!("[LayerWorker] WorkerEvent::Start {:?}", addresses);
-                                if let Some(resp) = resp {
-                                    resp.send(true);
-                                }
-                            }
-                            WorkerEvent::Forward(chat_id) => {
-                                onchain_service.increment_chat_token_count(chat_id, 1);
-                            }
-                            WorkerEvent::End(chat_id, client_address) => {
-                                log::info!("[LayerWorker] WorkerEvent::End {:?}", client_address);
-                                let res = onchain_service.claim_tokens(chat_id, Address::from_str(&client_address).unwrap()).await;
-                                log::info!("[LayerWorker] claim_tokens {:?}", res);
-                                if let Some(resp) = resp {
-                                    resp.send(res.is_ok());
-                                }
-                            }
-                        };
-                    }
-                }
-                None => break,
-            }
-        }
-    });
+    let (mut worker, _virtual_layers) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, model, node_id, from..to, layers_worker, device, stun_servers, usage_service).await;
 
     loop {
         tokio::select! {
