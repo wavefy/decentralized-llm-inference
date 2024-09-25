@@ -6,6 +6,8 @@ use std::{
 use p2p_network::addr::NodeId;
 use protocol::registry::to_worker::{NeighboursReply, UpdateReply};
 
+use crate::ModelDistribution;
+
 #[derive(Default, Debug)]
 struct NodeInfo {
     layers: Option<Range<u32>>,
@@ -20,6 +22,31 @@ pub struct SessionManager {
 impl SessionManager {
     pub fn on_start(&mut self, node: NodeId) {
         self.nodes.insert(node, Default::default());
+    }
+
+    // TODO: make it more efficient
+    pub fn get_distribution(&self) -> ModelDistribution {
+        let mut max_layer = 0;
+        for (_, info) in self.nodes.iter() {
+            if let Some(layers) = &info.layers {
+                if layers.end > max_layer {
+                    max_layer = layers.end;
+                }
+            }
+        }
+
+        let mut layers = Vec::new();
+        for _ in 0..max_layer {
+            layers.push(0);
+        }
+        for (_, info) in self.nodes.iter() {
+            if let Some(node_layers) = &info.layers {
+                for layer in node_layers.clone() {
+                    layers[layer as usize] += 1;
+                }
+            }
+        }
+        ModelDistribution { layers }
     }
 
     pub fn on_event(&mut self, node: NodeId, event: protocol::registry::to_registry::Event) {

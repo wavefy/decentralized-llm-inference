@@ -12,24 +12,47 @@ const MODELS: any = {
     }
 };
 
+const MAX_MEMORY_OPTIONS = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 24, 32, 48, 64];
+
 const P2pConfigWidget: React.FC = () => {
     const [status, setStatus] = useState<P2pStatus | null>(null);
     const [selectedModel, setSelectedModel] = useState<string>('');
+    const [maxMemory, setMaxMemory] = useState<number>(8);
+    const [warning, setWarning] = useState<string | null>(null);
     const [startLayer, setStartLayer] = useState<number>(0);
     const [endLayer, setEndLayer] = useState<number>(0);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        P2pStatusService.getP2pStatus().then(setStatus);
-
+        P2pStatusService.getP2pStatus().then(setStatus).catch((err) => {
+            setError(err instanceof Error ? err.message : 'An unknown error occurred');
+        });
     }, []);
 
-    useEffect(() => {
-        if (selectedModel) {
-            setStartLayer(0);
-            setEndLayer(MODELS[selectedModel].layers);
+    const handleSuggest = async () => {
+        if (!selectedModel) {
+            setWarning("Please select a model first.");
+            return;
         }
-    }, [selectedModel]);
+
+        try {
+            const maxLayers = Math.floor(maxMemory / MODELS[selectedModel].memory * MODELS[selectedModel].layers);
+            const suggestedLayers = await P2pStatusService.suggestLayers(selectedModel, maxLayers, MODELS[selectedModel].layers);
+            console.log(suggestedLayers);
+            if (suggestedLayers.from_layer !== undefined && suggestedLayers.from_layer != null && suggestedLayers.to_layer !== undefined && suggestedLayers.to_layer != null) {
+                setStartLayer(suggestedLayers.from_layer);
+                setEndLayer(suggestedLayers.to_layer);
+                setWarning(null);
+            } else if (suggestedLayers.min_layers !== undefined) {
+                const requiredMemory = Math.ceil(MODELS[selectedModel].memory * suggestedLayers.min_layers / MODELS[selectedModel].layers);
+                setWarning(`Need at least ${requiredMemory}GB of memory for ${suggestedLayers.min_layers} layers.`);
+            } else {
+                setWarning("Unable to determine suggested layers.");
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'An unknown error occurred');
+        }
+    };
 
     const handleStart = async () => {
         try {
@@ -55,8 +78,6 @@ const P2pConfigWidget: React.FC = () => {
         }
     };
 
-    if (!status) return <div className="text-center p-4">Loading...</div>;
-
     return (
         <div className="bg-gray-800 p-6 rounded-lg text-gray-300 border border-gray-700 shadow-lg">
             <h2 className="font-bold mb-6 text-2xl text-blue-400">P2P Configuration</h2>
@@ -66,7 +87,7 @@ const P2pConfigWidget: React.FC = () => {
                     <p>{error}</p>
                 </div>
             )}
-            {status.model ? (
+            {status?.model ? (
                 <div className="space-y-4">
                     <div className="bg-gray-700 p-4 rounded-md">
                         <p className="font-semibold">Current model: <span className="text-blue-300">{status.model.model}</span></p>
@@ -81,18 +102,42 @@ const P2pConfigWidget: React.FC = () => {
                 </div>
             ) : (
                 <div className="space-y-4">
-                    <select
-                        value={selectedModel}
-                        onChange={(e) => setSelectedModel(e.target.value)}
-                        className="bg-gray-700 text-black p-3 rounded-md w-full border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="">Select a model</option>
-                        {Object.keys(MODELS).map((model) => (
-                            <option key={model} value={model}>
-                                {model}
-                            </option>
-                        ))}
-                    </select>
+                    <div className="flex space-x-4 items-end">
+                        <div className="flex-grow">
+                            <select
+                                value={selectedModel}
+                                onChange={(e) => setSelectedModel(e.target.value)}
+                                className="bg-gray-700 text-white p-3 rounded-md w-full border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">Select a model</option>
+                                {Object.keys(MODELS).map((model) => (
+                                    <option key={model} value={model}>
+                                        {model}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="w-1/4">
+                            <select
+                                value={maxMemory}
+                                onChange={(e) => setMaxMemory(Number(e.target.value))}
+                                className="bg-gray-700 text-white p-3 rounded-md w-full border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                {MAX_MEMORY_OPTIONS.map((mem) => (
+                                    <option key={mem} value={mem}>
+                                        {mem}GB
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <button
+                            onClick={handleSuggest}
+                            className="bg-green-600 text-white px-4 py-3 rounded-md hover:bg-green-700 transition duration-300 ease-in-out"
+                        >
+                            Calculate suggests
+                        </button>
+                    </div>
+                    {warning && <p className="text-yellow-500">{warning}</p>}
                     {selectedModel && (
                         <>
                             <div className="bg-gray-700 p-4 rounded-md">

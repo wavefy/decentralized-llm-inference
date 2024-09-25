@@ -9,9 +9,11 @@ use protocol::registry::{
 };
 use tokio_tungstenite::connect_async;
 
+mod layers_selection;
 mod protobuf_stream;
 
 use crate::AnswerError;
+pub use layers_selection::{get_layers_distribution, select_layers, LayerSelectionRes};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RegistryClientEvent {
