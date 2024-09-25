@@ -16,8 +16,9 @@ pub struct VirtualModelLayers<LW, const MODEL_LAYERS: usize> {
 
 #[async_trait::async_trait]
 impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_LAYERS: usize> ModelLayersWorker<(Tensor, u32)> for VirtualModelLayers<LW, MODEL_LAYERS> {
-    async fn start(&self, session: Session) {
-        self.model_service
+    async fn start(&self, session: Session) -> Result<()> {
+        let res = self
+            .model_service
             .start(StartReq {
                 session: session.0,
                 chat_id: session.0,
@@ -26,6 +27,11 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
                 chain_index: 0,
             })
             .await;
+        if res.success {
+            Ok(())
+        } else {
+            Err(std::io::Error::new(std::io::ErrorKind::Other, "Worker Start Error").into())
+        }
     }
 
     async fn forward(&self, session: Session, step: u32, (tensor, seq_len): (Tensor, u32), index_pos: u32) -> Result<(Tensor, u32)> {

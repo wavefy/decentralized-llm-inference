@@ -85,10 +85,11 @@ impl Phi3LayersWorker {
 
 #[async_trait::async_trait]
 impl ModelLayersWorker<(Tensor, u32)> for Phi3LayersWorker {
-    async fn start(&self, session: Session) {
+    async fn start(&self, session: Session) -> Result<()> {
         for (idx, _) in self.layers.iter().enumerate() {
             self.caches.add_cache(idx, session);
         }
+        Ok(())
     }
 
     async fn forward(&self, session: Session, _step: u32, (mut xs, seq_len): (Tensor, u32), index_pos: u32) -> Result<(Tensor, u32)> {

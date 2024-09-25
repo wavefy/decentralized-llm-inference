@@ -45,7 +45,7 @@ struct Args {
     layers_to: Option<u32>,
 
     /// Private key
-    #[arg(env, long, default_value = "0x3bba41ade33b801bf3e42a080a699e73654eaf1775fb0afc5d65f5449e55d74b")]
+    #[arg(env, long, default_value = "0x69d91353993001d80ef74f7a27fcb15456d4d6298c755a5316a0a0d87b6b39b9")]
     private_key: Option<String>,
 }
 
@@ -71,7 +71,6 @@ async fn main() {
 
         let usage_service = Arc::new(onchain_service);
 
-        tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
         let (_query_tx, query_rx) = channel(10);
         start_server(&args.registry_server, &model, &node_id, layers_from..layers_to, args.http_bind, &args.stun_server, query_rx, usage_service).await;
     } else {
