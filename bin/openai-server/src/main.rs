@@ -45,7 +45,7 @@ struct Args {
     layers_to: Option<u32>,
 
     /// Private key
-    #[arg(env, long)]
+    #[arg(env, long, default_value = "0x3bba41ade33b801bf3e42a080a699e73654eaf1775fb0afc5d65f5449e55d74b")]
     private_key: Option<String>,
 }
 

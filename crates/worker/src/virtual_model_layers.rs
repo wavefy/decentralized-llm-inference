@@ -52,14 +52,11 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
 
     async fn finish(&self, session: Session) {
         self.model_service
-            .end(
-                EndReq {
-                    session: session.0,
-                    metadata: vec![],
-                    chain_index: 0,
-                },
-                true,
-            )
+            .end(EndReq {
+                session: session.0,
+                metadata: vec![],
+                chain_index: 0,
+            })
             .await;
     }
 }
