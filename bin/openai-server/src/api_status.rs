@@ -7,15 +7,22 @@ use poem::{
     Body, Response,
 };
 use serde::{Deserialize, Serialize};
-use tokio::{sync::Mutex, task::JoinHandle};
+use tokio::{
+    sync::{
+        mpsc::{channel, Sender},
+        oneshot, Mutex,
+    },
+    task::JoinHandle,
+};
 
-use crate::start_server;
+use crate::{start_server, WorkerControl};
 
 pub struct ModelState {
     model: String,
     from_layer: u32,
     to_layer: u32,
     runner: JoinHandle<()>,
+    query_tx: Sender<WorkerControl>,
 }
 
 #[derive(Clone)]
@@ -48,18 +55,39 @@ struct P2pStatusRes {
 #[handler]
 pub async fn p2p_status(data: Data<&P2pState>) -> Response {
     let model = data.model.lock().await;
-    let status = P2pStatusRes {
-        status: "ok".to_string(),
-        model: model.as_ref().map(|m| ModelConfig {
-            model: m.model.clone(),
-            from_layer: m.from_layer,
-            to_layer: m.to_layer,
-        }),
-        spent: 0,
-        earned: 0,
-        balance: 0,
-        peers: 0,
-        sessions: 0,
+    let status = if let Some(model) = model.as_ref() {
+        let (tx, rx) = oneshot::channel();
+        model.query_tx.send(WorkerControl::Status(tx)).await.unwrap();
+        let status = rx.await.unwrap();
+
+        P2pStatusRes {
+            status: if status.ready {
+                "ready"
+            } else {
+                "incomplete"
+            }
+            .to_string(),
+            model: Some(ModelConfig {
+                model: model.model.clone(),
+                from_layer: model.from_layer,
+                to_layer: model.to_layer,
+            }),
+            spent: 0,
+            earned: 0,
+            balance: 0,
+            peers: status.peers.len() as u32,
+            sessions: status.sessions.len() as u32,
+        }
+    } else {
+        P2pStatusRes {
+            status: "stopped".to_string(),
+            model: None,
+            spent: 0,
+            earned: 0,
+            balance: 0,
+            peers: 0,
+            sessions: 0,
+        }
     };
 
     Response::builder().header("Content-Type", "application/json").body(Body::from_json(&status).unwrap())
@@ -88,14 +116,16 @@ pub async fn p2p_start(body: Json<P2pStart>, data: Data<&P2pState>) -> Response 
     let stun_server = data.stun_server.clone();
     let model = body.model.clone();
     let range = body.from_layer..body.to_layer;
+    let (query_tx, query_rx) = channel(10);
     let runner = tokio::spawn(async move {
-        start_server(&registry_server, &model, &node_id, range, http_bind, &stun_server).await;
+        start_server(&registry_server, &model, &node_id, range, http_bind, &stun_server, query_rx).await;
     });
     let model = ModelState {
         model: body.model.clone(),
         from_layer: body.from_layer,
         to_layer: body.to_layer,
         runner,
+        query_tx,
     };
     *current_model = Some(model);
     Response::builder().status(StatusCode::OK).body(Body::from_json(&P2pStartRes {}).unwrap())

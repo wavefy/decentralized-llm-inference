@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 
 use clap::Parser;
 use openai_server::{start_control_server, start_server};
+use tokio::sync::mpsc::channel;
 use utils::random_node_id;
 
 /// OpenAI Server for decentralized LLM
@@ -57,7 +58,8 @@ async fn main() {
     if let Some(model) = args.model {
         let layers_from = args.layers_from.unwrap_or(0);
         let layers_to = args.layers_to.unwrap_or(0);
-        start_server(&args.registry_server, &model, &node_id, layers_from..layers_to, args.http_bind, &args.stun_server).await;
+        let (_query_tx, query_rx) = channel(10);
+        start_server(&args.registry_server, &model, &node_id, layers_from..layers_to, args.http_bind, &args.stun_server, query_rx).await;
     } else {
         start_control_server(args.control_bind, &args.registry_server, &node_id, args.http_bind, &args.stun_server).await;
     }

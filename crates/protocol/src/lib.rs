@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use model_router::{LayerRemoteInfo, RouteSync};
 
 pub mod registry {
@@ -17,6 +19,14 @@ pub struct Session(pub u64);
 impl Session {
     pub fn new() -> Self {
         Self(rand::random())
+    }
+}
+
+impl Deref for Session {
+    type Target = u64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
