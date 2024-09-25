@@ -83,7 +83,7 @@ impl<LW: ModelLayersWorker<(Tensor, u32)>, const MODEL_LAYERS: usize> ServiceHan
             }
             "END" => {
                 let end_req = EndReq::decode(req.payload.as_slice()).unwrap();
-                let res = self.end(end_req, false).await;
+                let res = self.end(end_req).await;
                 let mut payload = Vec::new();
                 res.encode(&mut payload).unwrap();
                 RpcRes { seq: req.seq, success: true, payload }
@@ -237,7 +237,7 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
         res
     }
 
-    pub async fn end(&self, req: EndReq, is_root: bool) -> EndRes {
+    pub async fn end(&self, req: EndReq) -> EndRes {
         if let Some(container) = self.sessions.write().remove(&Session(req.session)) {
             if let Ok(req) = self.usage_service.pre_end(container.chat_id, req.clone()).await {
                 log::warn!("[ModelService] session {} ending ...", req.session);
