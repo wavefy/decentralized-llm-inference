@@ -3,14 +3,19 @@
 
 use clap::Parser;
 use std::env;
+use utils::random_node_id;
 
 use core::net::SocketAddr;
-use openai_server::start_server;
-use tauri::{generate_context, Manager};
+use openai_server::start_control_server;
+use tauri::generate_context;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
+    /// status bind addr
+    #[arg(env, long, default_value = "127.0.0.1:18889")]
+    control_bind: SocketAddr,
+
     /// http bind addr
     #[arg(env, long, default_value = "127.0.0.1:1234")]
     http_bind: SocketAddr,
@@ -25,19 +30,7 @@ struct Args {
 
     /// node id
     #[arg(env, long)]
-    node_id: String,
-
-    /// model id
-    #[arg(env, long, default_value = "phi3")]
-    model: String,
-
-    /// model layers, layer 0 is embeding work, from 1 is for matrix jobs
-    #[arg(env, long)]
-    layers_from: u32,
-
-    /// model layers, layer 0 is embeding work, from 1 is for matrix jobs
-    #[arg(env, long)]
-    layers_to: u32,
+    node_id: Option<String>,
 }
 
 #[tokio::main]
@@ -49,12 +42,14 @@ async fn main() {
 
     let args = Args::parse();
 
+    let node_id = args.node_id.unwrap_or_else(random_node_id);
+
     tauri::Builder::default()
-        .setup(move |app| {
+        .setup(move |_app| {
             // let window = app.get_window("main").unwrap();
             // window.open_devtools();
             tauri::async_runtime::spawn(async move {
-                start_server(&args.registry_server, &args.model, &args.node_id, args.layers_from..args.layers_to, args.http_bind, &args.stun_server).await;
+                start_control_server(args.control_bind, &args.registry_server, &node_id, args.http_bind, &args.stun_server).await;
             });
             Ok(())
         })
