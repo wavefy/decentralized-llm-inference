@@ -8,12 +8,9 @@ use poem::{
 };
 use registry::client::{get_layers_distribution, select_layers, LayerSelectionRes};
 use serde::{Deserialize, Serialize};
-use tokio::{
-    sync::{
-        mpsc::{channel, Sender},
-        oneshot, Mutex,
-    },
-    task::JoinHandle,
+use tokio::sync::{
+    mpsc::{channel, Sender},
+    oneshot, Mutex,
 };
 
 use crate::{start_server, WorkerControl};
@@ -22,7 +19,6 @@ pub struct ModelState {
     model: String,
     from_layer: u32,
     to_layer: u32,
-    runner: JoinHandle<()>,
     query_tx: Sender<WorkerControl>,
 }
 
@@ -118,14 +114,13 @@ pub async fn p2p_start(body: Json<P2pStart>, data: Data<&P2pState>) -> Response 
     let model = body.model.clone();
     let range = body.from_layer..body.to_layer;
     let (query_tx, query_rx) = channel(10);
-    let runner = tokio::spawn(async move {
+    tokio::spawn(async move {
         start_server(&registry_server, &model, &node_id, range, http_bind, &stun_server, query_rx).await;
     });
     let model = ModelState {
         model: body.model.clone(),
         from_layer: body.from_layer,
         to_layer: body.to_layer,
-        runner,
         query_tx,
     };
     *current_model = Some(model);
@@ -139,7 +134,9 @@ struct P2pStopRes {}
 pub async fn p2p_stop(data: Data<&P2pState>) -> Response {
     let mut current_model = data.model.lock().await;
     if let Some(model) = current_model.as_ref() {
-        model.runner.abort();
+        let (tx, rx) = oneshot::channel();
+        model.query_tx.send(WorkerControl::Stop(tx)).await.unwrap();
+        rx.await.unwrap();
         *current_model = None;
         Response::builder().status(StatusCode::OK).body(Body::from_json(&P2pStopRes {}).unwrap())
     } else {
