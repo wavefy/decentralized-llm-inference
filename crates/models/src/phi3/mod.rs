@@ -91,7 +91,10 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
         };
         let tokens = tokens.get_ids();
 
-        self.layers_worker.start(session).await;
+        if let Err(e) = self.layers_worker.start(session).await {
+            log::error!("failed to start layers worker: {e}");
+            return Err(e);
+        }
 
         // for first cycle, process input prompt
         // we split it into tokens, and then process each token one by one for avoiding big message size

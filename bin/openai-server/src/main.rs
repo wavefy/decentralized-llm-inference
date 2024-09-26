@@ -4,9 +4,9 @@ use contract::{
     OnChainService, CONTRACT_ADDRESS,
 };
 use openai_server::{start_control_server, start_server};
+use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc::channel;
 use utils::random_node_id;
-use std::{net::SocketAddr, sync::Arc};
 
 /// OpenAI Server for decentralized LLM
 #[derive(Parser, Debug)]
@@ -60,7 +60,6 @@ async fn main() {
     }
 
     let node_id = args.node_id.unwrap_or_else(random_node_id);
-
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
     if let Some(model) = args.model {
         let layers_from = args.layers_from.unwrap_or(0);
@@ -72,7 +71,17 @@ async fn main() {
         let usage_service = Arc::new(onchain_service);
 
         let (_query_tx, query_rx) = channel(10);
-        start_server(&args.registry_server, &model, &node_id, layers_from..layers_to, args.http_bind, &args.stun_server, query_rx, usage_service).await;
+        start_server(
+            &args.registry_server,
+            &model,
+            &node_id,
+            layers_from..layers_to,
+            args.http_bind,
+            &args.stun_server,
+            query_rx,
+            usage_service,
+        )
+        .await;
     } else {
         start_control_server(args.control_bind, &args.registry_server, &node_id, args.http_bind, &args.stun_server).await;
     }

@@ -1,6 +1,7 @@
 pub mod client;
 pub mod storage;
 
+use std::sync::Arc;
 use anyhow::{Error, Result};
 pub use aptos_sdk;
 use aptos_sdk::rest_client::{aptos_api_types::Address, error::RestError, Response, Transaction};
@@ -10,20 +11,18 @@ use usage_service::WorkerUsageService;
 
 pub const CONTRACT_ADDRESS: &str = "0x9123e2561d81ba5f77473b8dc664fa75179c841061d12264508894610b9d0b7a";
 
-pub enum OnChainReq {
-    ClientCreateSession(u64, u64, u64, Vec<Address>),
-    ClientCommitTokenCount(u64),
+pub enum OnChainEvent {
     LayerWorkerClaimToken(u64, Address),
 }
 
 pub struct OnChainService {
     storage: RwLock<storage::OnChainStorage>,
-    client: client::OnChainClient,
+    client: Arc<client::OnChainClient>,
 }
 
 impl OnChainService {
     pub fn new(account: aptos_sdk::types::LocalAccount, chain: aptos_sdk::rest_client::AptosBaseUrl) -> Self {
-        let client = client::OnChainClient::new(account, chain, CONTRACT_ADDRESS);
+        let client = Arc::new(client::OnChainClient::new(account, chain, CONTRACT_ADDRESS));
         let storage = RwLock::new(storage::OnChainStorage::new());
         Self { client, storage }
     }
@@ -57,6 +56,14 @@ impl OnChainService {
         log::info!("[OnChainService] claim token: {token_count}");
         let onchain_session_id = self.client.get_session_id(client_address, chat_id).await?;
         self.client.claim_tokens(client_address, onchain_session_id, token_count).await
+    }
+
+    pub async fn get_chat_token_count(&self, chat_id: u64) -> u64 {
+        self.storage.read().await.get_chat_token_count(chat_id)
+    }
+
+    pub async fn get_session_id(&self, chat_id: u64) -> Result<u64, RestError> {
+        self.client.get_session_id(self.client.account.address().into(), chat_id).await
     }
 }
 
@@ -140,22 +147,21 @@ impl WorkerUsageService for OnChainService {
     }
 
     async fn post_end(&self, chat_id: u64, req: EndReq, res: EndRes) -> EndRes {
-        log::info!("[OnChainService] post_end: {:?}", req.chain_index);
         if req.chain_index != 0 {
             let metadata = serde_json::from_str::<OnChainServiceMetadata>(&String::from_utf8(req.metadata).unwrap()).expect("Should be able to parse metadata");
-            match self.claim_tokens(chat_id, metadata.root_address).await {
-                Ok(_) => {
-                    log::info!("[OnChainService] Successfully claimed tokens");
-                    res
-                }
-                Err(e) => {
-                    log::error!("[OnChainService] Failed to claim tokens: {e:?}");
-                    EndRes { success: false, ..res }
-                }
+            let token_count = self.get_chat_token_count(chat_id).await;
+            if let Ok(onchain_session_id) = self.get_session_id(chat_id).await {
+                let client = self.client.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = client.claim_tokens(metadata.root_address, onchain_session_id, token_count).await {
+                        log::error!("[OnChainService] Failed to claim tokens: {e:?}");
+                    } else {
+                        log::info!("[OnChainService] Successfully claim tokens");
+                    }
+                });
             }
-        } else {
-            res
         }
+        res
     }
 
     async fn pre_forward(&self, chat_id: u64, req: ForwardReq) -> Result<ForwardReq> {

@@ -8,7 +8,7 @@ const P2pStatusWidget: React.FC = () => {
         P2pStatusService.getP2pStatus().then(setP2pStatus);
         const interval = setInterval(() => {
             P2pStatusService.getP2pStatus().then(setP2pStatus);
-        }, 1000);
+        }, 8000);
         return () => clearInterval(interval);
     }, []);
 

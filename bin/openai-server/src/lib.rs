@@ -9,13 +9,6 @@ use std::{
 use api_chat::{chat_completions, get_model, list_models};
 use api_status::{p2p_start, p2p_status, p2p_stop, P2pState};
 use candle_core::DType;
-use contract::{
-    aptos_sdk::{
-        rest_client::{aptos_api_types::Address, AptosBaseUrl},
-        types::LocalAccount,
-    },
-    OnChainService,
-};
 use models::{fake, get_device, llama, phi3, ChatModel};
 use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
 use tokio::{

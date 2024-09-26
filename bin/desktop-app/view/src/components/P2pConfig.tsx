@@ -16,8 +16,8 @@ const P2pConfigWidget: React.FC = () => {
     const [status, setStatus] = useState<P2pStatus | null>(null);
     const [selectedModel, setSelectedModel] = useState<string>('');
     const [startLayer, setStartLayer] = useState<number>(0);
-    const [endLayer, setEndLayer] = useState<number>(0);
-    const [privateKey, setPrivateKey] = useState<string>('0x0');
+    const [endLayer, setEndLayer] = useState<number>(18);
+    const [privateKey, setPrivateKey] = useState<string>('0x3bba41ade33b801bf3e42a080a699e73654eaf1775fb0afc5d65f5449e55d74b');
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
