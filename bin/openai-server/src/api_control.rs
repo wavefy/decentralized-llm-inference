@@ -151,8 +151,10 @@ pub async fn p2p_stop(data: Data<&P2pState>) -> Response {
     let mut current_model = data.model.lock().await;
     if let Some(model) = current_model.as_ref() {
         let (tx, rx) = oneshot::channel();
+        log::info!("p2p_stop: sending stop signal");
         model.query_tx.send(WorkerControl::Stop(tx)).await.unwrap();
         rx.await.unwrap();
+        log::info!("p2p_stop: stop ack signal received");
         *current_model = None;
         Response::builder().status(StatusCode::OK).body(Body::from_json(&P2pStopRes {}).unwrap())
     } else {
@@ -183,10 +185,11 @@ pub async fn p2p_suggest_layers(query: Query<P2pSuggestLayers>, data: Data<&P2pS
             while distrbution.layers.len() < query.max_layers as usize {
                 distrbution.layers.push(0);
             }
-            log::info!("distrbution: {} {}", distrbution.layers.len(), query.max_layers);
-            let selected_layers = select_layers(&distrbution.layers, query.layers);
+            log::info!("distribution: {} {} {:?}", distrbution.layers.len(), query.max_layers, distrbution.layers);
+            let suggested_layers = select_layers(&distrbution.layers, query.layers);
+            log::info!("selected_layers: {suggested_layers:?}");
 
-            Response::builder().status(StatusCode::OK).body(match selected_layers {
+            Response::builder().status(StatusCode::OK).body(match suggested_layers {
                 LayerSelectionRes::EnoughLayers { ranges } => Body::from_json(&P2pSuggestLayersRes {
                     distribution: distrbution.layers,
                     min_layers: None,
