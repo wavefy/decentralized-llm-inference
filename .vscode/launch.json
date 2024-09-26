@@ -1,0 +1,466 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'desktop_app'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=desktop-app"
+        ],
+        "filter": {
+          "name": "desktop_app",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'desktop-app'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=desktop-app",
+          "--package=desktop-app"
+        ],
+        "filter": {
+          "name": "desktop-app",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'desktop-app'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=desktop-app",
+          "--package=desktop-app"
+        ],
+        "filter": {
+          "name": "desktop-app",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'openai_server'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=openai-server"
+        ],
+        "filter": {
+          "name": "openai_server",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'openai-server'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=openai-server",
+          "--package=openai-server",
+          "--features=metal"
+        ],
+        "filter": {
+          "name": "openai-server",
+          "kind": "bin"
+        }
+      },
+      "args": [
+        "--http-bind",
+        "127.0.0.1:18888",
+        "--control-bind",
+        "127.0.0.1:28888",
+        "--registry-server",
+        "ws://127.0.0.1:3000/ws"
+      ],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'openai-server'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=openai-server",
+          "--package=openai-server"
+        ],
+        "filter": {
+          "name": "openai-server",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'contract'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=contract"
+        ],
+        "filter": {
+          "name": "contract",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'protocol'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=protocol"
+        ],
+        "filter": {
+          "name": "protocol",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'model_router'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=model-router"
+        ],
+        "filter": {
+          "name": "model_router",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'p2p_network'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=p2p-network"
+        ],
+        "filter": {
+          "name": "p2p_network",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'usage_service'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=usage-service"
+        ],
+        "filter": {
+          "name": "usage_service",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'models'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=models"
+        ],
+        "filter": {
+          "name": "models",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug example 'llama_local'",
+      "cargo": {
+        "args": [
+          "build",
+          "--example=llama_local",
+          "--package=models"
+        ],
+        "filter": {
+          "name": "llama_local",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in example 'llama_local'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--example=llama_local",
+          "--package=models"
+        ],
+        "filter": {
+          "name": "llama_local",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug example 'phi3_local'",
+      "cargo": {
+        "args": [
+          "build",
+          "--example=phi3_local",
+          "--package=models"
+        ],
+        "filter": {
+          "name": "phi3_local",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in example 'phi3_local'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--example=phi3_local",
+          "--package=models"
+        ],
+        "filter": {
+          "name": "phi3_local",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'utils'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=utils"
+        ],
+        "filter": {
+          "name": "utils",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'worker'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=worker"
+        ],
+        "filter": {
+          "name": "worker",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'registry'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=registry"
+        ],
+        "filter": {
+          "name": "registry",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'layer-worker'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=layer-worker",
+          "--package=layer-worker"
+        ],
+        "filter": {
+          "name": "layer-worker",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'layer-worker'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=layer-worker",
+          "--package=layer-worker"
+        ],
+        "filter": {
+          "name": "layer-worker",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'registry-server'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=registry-server",
+          "--package=registry-server"
+        ],
+        "filter": {
+          "name": "registry-server",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'registry-server'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=registry-server",
+          "--package=registry-server"
+        ],
+        "filter": {
+          "name": "registry-server",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'openai_protocol'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=openai-protocol"
+        ],
+        "filter": {
+          "name": "openai_protocol",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

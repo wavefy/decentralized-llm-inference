@@ -16,19 +16,38 @@ pub struct VirtualModelLayers<LW, const MODEL_LAYERS: usize> {
 
 #[async_trait::async_trait]
 impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_LAYERS: usize> ModelLayersWorker<(Tensor, u32)> for VirtualModelLayers<LW, MODEL_LAYERS> {
-    async fn start(&self, session: Session) {
-        self.model_service
+    async fn start(&self, session: Session) -> Result<()> {
+        let res = self
+            .model_service
             .start(StartReq {
                 session: session.0,
                 chat_id: session.0,
                 from_layer: 0,
+                metadata: vec![],
+                chain_index: 0,
             })
             .await;
+        if res.success {
+            Ok(())
+        } else {
+            Err(std::io::Error::new(std::io::ErrorKind::Other, "Worker Start Error").into())
+        }
     }
 
     async fn forward(&self, session: Session, step: u32, (tensor, seq_len): (Tensor, u32), index_pos: u32) -> Result<(Tensor, u32)> {
         let embedding = TensorBuf::from(tensor).to_vec();
-        let res = self.model_service.forward(ForwardReq { session: session.0, embedding, step, seq_len, index_pos }).await;
+        let res = self
+            .model_service
+            .forward(ForwardReq {
+                session: session.0,
+                embedding,
+                step,
+                seq_len,
+                index_pos,
+                metadata: vec![],
+                chain_index: 0,
+            })
+            .await;
         if res.success {
             let res_tensor = TensorBuf::try_from(res.embedding).unwrap().to_tensor(&self.device)?;
             Ok((res_tensor, seq_len))
@@ -38,6 +57,12 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
     }
 
     async fn finish(&self, session: Session) {
-        self.model_service.end(EndReq { session: session.0 }).await;
+        self.model_service
+            .end(EndReq {
+                session: session.0,
+                metadata: vec![],
+                chain_index: 0,
+            })
+            .await;
     }
 }

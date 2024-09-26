@@ -1,5 +1,9 @@
 use std::{net::SocketAddr, sync::Arc};
 
+use contract::{
+    aptos_sdk::{rest_client::AptosBaseUrl, types::LocalAccount},
+    OnChainService,
+};
 use poem::{
     handler,
     http::StatusCode,
@@ -95,6 +99,7 @@ struct P2pStart {
     model: String,
     from_layer: u32,
     to_layer: u32,
+    private_key: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -114,8 +119,13 @@ pub async fn p2p_start(body: Json<P2pStart>, data: Data<&P2pState>) -> Response 
     let model = body.model.clone();
     let range = body.from_layer..body.to_layer;
     let (query_tx, query_rx) = channel(10);
+    let account = LocalAccount::from_private_key(&body.private_key, 0).expect("Invalid private key");
+    let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet);
+    onchain_service.init().await;
+
+    let usage_service = Arc::new(onchain_service);
     tokio::spawn(async move {
-        start_server(&registry_server, &model, &node_id, range, http_bind, &stun_server, query_rx).await;
+        start_server(&registry_server, &model, &node_id, range, http_bind, &stun_server, query_rx, usage_service).await;
     });
     let model = ModelState {
         model: body.model.clone(),

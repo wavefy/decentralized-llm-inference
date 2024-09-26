@@ -70,6 +70,8 @@ impl<W: ModelLayersWorker<(Tensor, u32)>> Phi3Model<W> {
 #[async_trait::async_trait]
 impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for Phi3Model<W> {
     async fn chat(&self, session: Session, cfg: ChatCfg, prompt: &str, tx: Sender<String>) -> Result<()> {
+        log::info!("chatting with Phi3 model");
+        log::info!("prompt: {prompt}");
         let mut tos = TokenOutputStream::new(self.tokenizer.clone());
         let tokens = tos.tokenizer().encode(prompt, true).unwrap();
         let mut all_tokens = vec![];
@@ -89,7 +91,10 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
         };
         let tokens = tokens.get_ids();
 
-        self.layers_worker.start(session).await;
+        if let Err(e) = self.layers_worker.start(session).await {
+            log::error!("failed to start layers worker: {e}");
+            return Err(e);
+        }
 
         // for first cycle, process input prompt
         // we split it into tokens, and then process each token one by one for avoiding big message size

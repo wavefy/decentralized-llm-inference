@@ -1,0 +1,9 @@
+[package]
+name = "usage-service"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+protocol = { path = "../protocol", version = "0.1.0" }

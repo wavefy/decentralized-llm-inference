@@ -1,0 +1,30 @@
+---
+profiles:
+  llm-client:
+    network: Devnet
+    private_key: "0x86a91455b935bd70cb67d97e0f1289585f209d648d5a1200edf2fbd7167d09f5"
+    public_key: "0xab047d61e02809db69fed063d757f6050b0d92fcf3a966a0ae7fc5940d356320"
+    account: b83659a98c2351d9ead094aa8453b2f6558d501d42d60f4592add6ae2b5bac49
+    rest_url: "https://fullnode.devnet.aptoslabs.com"
+    faucet_url: "https://faucet.devnet.aptoslabs.com"
+  llm-client-test:
+    network: Testnet
+    private_key: "0x3bba41ade33b801bf3e42a080a699e73654eaf1775fb0afc5d65f5449e55d74b"
+    public_key: "0x93e4489e048c789ff17d47a23a951ced37a204156b51cb8e4197176b28621554"
+    account: dbb86ecfdb27a506b03f6d321e1e245740bff8684349084847c56a7569a48821
+    rest_url: "https://fullnode.testnet.aptoslabs.com"
+    faucet_url: "https://faucet.testnet.aptoslabs.com"
+  llm-layer-worker-1:
+    network: Devnet
+    private_key: "0xd5c0c61d95d5b3a379f8ae11554251e244bc8ca583b3a23dc72c491363d38de5"
+    public_key: "0xc9cdb4a3e417150c9d884ddbf533d247a24bb74b6c5939c7493bea8d668ff5d9"
+    account: a387ff08fed22efe9937d1f93ccc07bbe0090eb376a56d3197a0bf44cf2ec3ab
+    rest_url: "https://fullnode.devnet.aptoslabs.com"
+    faucet_url: "https://faucet.devnet.aptoslabs.com"
+  llm-layer-worker-test-1:
+    network: Testnet
+    private_key: "0x69d91353993001d80ef74f7a27fcb15456d4d6298c755a5316a0a0d87b6b39b9"
+    public_key: "0x29f20689fc5c4750668a3e44356fcb09406fd2ffa99b5a063963059c6e29eef0"
+    account: 879170b4ab243b75c5a5d0ae94165c8be5c110c77d23b5d19a9d542018b31a45
+    rest_url: "https://fullnode.testnet.aptoslabs.com"
+    faucet_url: "https://faucet.testnet.aptoslabs.com"

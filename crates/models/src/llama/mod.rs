@@ -103,7 +103,10 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
         let mut index_pos = 0;
         let mut token_generated = 0;
 
-        self.layers_worker.start(session).await;
+        if let Err(e) = self.layers_worker.start(session).await {
+            log::error!("failed to start layers worker: {e}");
+            return Err(e);
+        }
         for index in 0..cfg.max_len {
             let (context_size, context_index) = if USE_KV_CACHE && index > 0 {
                 (1, index_pos)

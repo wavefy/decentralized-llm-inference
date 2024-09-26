@@ -20,7 +20,8 @@ const P2pConfigWidget: React.FC = () => {
     const [maxMemory, setMaxMemory] = useState<number>(8);
     const [warning, setWarning] = useState<string | null>(null);
     const [startLayer, setStartLayer] = useState<number>(0);
-    const [endLayer, setEndLayer] = useState<number>(0);
+    const [endLayer, setEndLayer] = useState<number>(18);
+    const [privateKey, setPrivateKey] = useState<string>('0x3bba41ade33b801bf3e42a080a699e73654eaf1775fb0afc5d65f5449e55d74b');
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -61,6 +62,7 @@ const P2pConfigWidget: React.FC = () => {
                 model: selectedModel,
                 from_layer: startLayer,
                 to_layer: endLayer,
+                private_key: privateKey
             });
             P2pStatusService.getP2pStatus().then(setStatus);
         } catch (err) {
@@ -170,6 +172,18 @@ const P2pConfigWidget: React.FC = () => {
                                             className="bg-gray-600 text-white p-2 rounded-md w-full border border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         />
                                     </div>
+
+
+                                </div>
+                                <div className="w-full ">
+                                    <label htmlFor="privateKey" className="block mb-1 text-sm">Private Key</label>
+                                    <input
+                                        id="privateKey"
+                                        type="text"
+                                        value={privateKey}
+                                        onChange={(e) => setPrivateKey(e.target.value)}
+                                        className="bg-gray-600 text-white p-2 rounded-md w-full border border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
                                 </div>
                             </div>
                         </>

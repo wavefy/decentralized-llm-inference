@@ -17,7 +17,7 @@ use tokio::time::Interval;
 
 use crate::{rpc::RpcClientRx, ServiceHandler};
 
-pub struct WorkerComunication<const MODEL_LAYERS: usize> {
+pub struct WorkerCommunication<const MODEL_LAYERS: usize> {
     registry_client: RegistryClient,
     router: Arc<RwLock<RouteTable<NodeId, MODEL_LAYERS>>>,
     network: NetworkNode<protocol::worker::Event>,
@@ -28,7 +28,7 @@ pub struct WorkerComunication<const MODEL_LAYERS: usize> {
     res_rx: Receiver<(NodeId, RpcRes)>,
 }
 
-impl<const MODEL_LAYERS: usize> WorkerComunication<MODEL_LAYERS> {
+impl<const MODEL_LAYERS: usize> WorkerCommunication<MODEL_LAYERS> {
     // TODO make layers_worker generic
     pub async fn new(
         registry_endpoint: &str,

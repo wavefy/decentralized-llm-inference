@@ -9,10 +9,13 @@ message StartReq {
     uint64 session = 1;
     uint64 chat_id = 2;
     uint32 from_layer = 3;
+    bytes metadata = 4;
+    uint32 chain_index = 5;
 }
 
 message StartRes {
     bool success = 1;
+    bytes metadata = 2;
 }
 
 message ForwardReq {
@@ -21,17 +24,23 @@ message ForwardReq {
     bytes embedding = 3;
     uint32 index_pos = 4;
     uint32 seq_len = 5;
+    bytes metadata = 6;
+    uint32 chain_index = 7;
 }
 
 message ForwardRes {
     bool success = 1;
     bytes embedding = 2;
+    bytes metadata = 3;
 }
 
 message EndReq {
     uint64 session = 1;
+    bytes metadata = 2;
+    uint32 chain_index = 3;
 }
 
 message EndRes {
     bool success = 1;
+    bytes metadata = 2;
 }

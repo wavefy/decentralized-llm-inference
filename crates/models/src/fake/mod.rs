@@ -49,7 +49,9 @@ impl FakeLayersWorker {
 
 #[async_trait::async_trait]
 impl ModelLayersWorker<(Tensor, u32)> for FakeLayersWorker {
-    async fn start(&self, session: Session) {}
+    async fn start(&self, session: Session) -> Result<()> {
+        Ok(())
+    }
 
     async fn forward(&self, session: Session, _step: u32, xs: (Tensor, u32), index_pos: u32) -> Result<(Tensor, u32)> {
         tokio::time::sleep(Duration::from_millis(500)).await;

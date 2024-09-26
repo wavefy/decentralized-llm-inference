@@ -1,9 +1,13 @@
-use std::net::ToSocketAddrs;
-
 use candle_core::{DType, Device, Tensor};
 use clap::Parser;
+use contract::{
+    aptos_sdk::{rest_client::AptosBaseUrl, types::LocalAccount},
+    OnChainService,
+};
 use models::{fake, get_device, llama, phi3, ModelLayersWorker};
+use std::{net::ToSocketAddrs, sync::Arc};
 use tokio::signal;
+use usage_service::WorkerUsageService;
 use worker::WorkerRunner;
 
 /// OpenAI Server for decentralized LLM
@@ -33,6 +37,14 @@ struct Args {
     /// model layers, layer 0 is embeding work, from 1 is for matrix jobs
     #[arg(env, long)]
     layers_to: u32,
+
+    /// Wallet private key
+    #[arg(env, long, default_value = "0x69d91353993001d80ef74f7a27fcb15456d4d6298c755a5316a0a0d87b6b39b9")]
+    private_key: String,
+
+    /// Contract address
+    #[arg(env, long, default_value = "0x9123e2561d81ba5f77473b8dc664fa75179c841061d12264508894610b9d0b7a")]
+    contract_address: String,
 }
 
 #[tokio::main]
@@ -46,8 +58,13 @@ async fn main() {
     }
 
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
-
     let device = get_device(false).unwrap();
+
+    let account = LocalAccount::from_private_key(&args.private_key, 0).expect("Invalid private key");
+    let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet);
+    onchain_service.init().await;
+    let usage_service = Arc::new(onchain_service);
+
     match args.model.as_str() {
         "phi3" => {
             let layers_worker = phi3::Phi3LayersWorker::new(false, args.layers_from..args.layers_to, &device).await.unwrap();
@@ -60,6 +77,7 @@ async fn main() {
                 args.layers_from,
                 args.layers_to,
                 &args.stun_server,
+                usage_service,
             )
             .await;
         }
@@ -74,6 +92,7 @@ async fn main() {
                 args.layers_from,
                 args.layers_to,
                 &args.stun_server,
+                usage_service,
             )
             .await;
         }
@@ -88,6 +107,7 @@ async fn main() {
                 args.layers_from,
                 args.layers_to,
                 &args.stun_server,
+                usage_service,
             )
             .await;
         }
@@ -104,9 +124,11 @@ async fn run<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const
     from: u32,
     to: u32,
     stun_server: &str,
+    usage_service: Arc<dyn WorkerUsageService>,
 ) {
     let stun_servers = stun_server.to_socket_addrs().unwrap().collect();
-    let (mut worker, _virtual_layers) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, model, node_id, from..to, layers_worker, device, stun_servers).await;
+    let (mut worker, _virtual_layers) = WorkerRunner::<MODEL_LAYERS>::new(registry_server, model, node_id, from..to, layers_worker, device, stun_servers, usage_service).await;
+
     loop {
         tokio::select! {
             e = worker.recv() => match e {

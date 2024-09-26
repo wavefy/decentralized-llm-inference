@@ -1,4 +1,4 @@
-use candle_core::{Device, Tensor};
+use candle_core::{Device, Result, Tensor};
 use models::{
     get_device,
     phi3::{Phi3LayersWorker, Phi3Model},
@@ -48,11 +48,11 @@ impl VirtualRemoteLayersWorker {
 
 #[async_trait::async_trait]
 impl ModelLayersWorker<(Tensor, u32)> for VirtualRemoteLayersWorker {
-    async fn start(&self, session: protocol::Session) {
+    async fn start(&self, session: protocol::Session) -> Result<()> {
         self.layers_worker.start(session).await;
     }
 
-    async fn forward(&self, session: Session, step: u32, (tensor, seq_len): (Tensor, u32), index_pos: u32) -> candle_core::Result<(Tensor, u32)> {
+    async fn forward(&self, session: Session, step: u32, (tensor, seq_len): (Tensor, u32), index_pos: u32) -> Result<(Tensor, u32)> {
         let tensor_buf = TensorBuf::from(tensor).to_vec();
         // println!("convert req to buf {}", buf.len());
         //convert back to request

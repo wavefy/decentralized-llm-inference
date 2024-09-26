@@ -4,6 +4,7 @@ export interface P2pStartRequest {
     model: string,
     from_layer: number,
     to_layer: number,
+    private_key: string,
 }
 
 export interface P2pStopRequest { }

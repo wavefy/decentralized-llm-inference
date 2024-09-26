@@ -1,0 +1,18 @@
+[package]
+name = "contract"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-core", branch = "devnet" }
+url = { version = "2.4.0", features = ["serde"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_bytes = { version = "0.11.5" }
+usage-service = { path = "../usage-service", version = "0.1.0" }
+protocol = { path = "../protocol", version = "0.1.0" }
+utils = { path = "../utils", version = "0.1.0" }

@@ -97,10 +97,10 @@ impl<Node: Clone + Debug + Eq + Hash, const MODEL_LAYERS: usize> RouteTable<Node
     }
 
     pub fn create_sync(&self, now_ms: u64) -> RouteSync {
-        log::info!("create sync");
+        // log::info!("create sync");
         let mut layers = vec![None; MODEL_LAYERS];
         for layer in 0..MODEL_LAYERS {
-            layers[layer] = self.select_next(layer as u32).map(|n| LayerRemoteInfo {
+            layers[layer] = self.select_next(layer as u32).map(|n: RoutePath<Node>| LayerRemoteInfo {
                 cost: n.cost(),
                 last_updated: n.last_updated().unwrap_or(now_ms),
             });
@@ -111,7 +111,7 @@ impl<Node: Clone + Debug + Eq + Hash, const MODEL_LAYERS: usize> RouteTable<Node
     /// When we received a sync message from other node => we find if local layers can contribute to it
     /// We only care about
     pub fn apply_sync(&mut self, from: Node, rtt: u32, sync: RouteSync) {
-        log::info!("apply sync from {from:?} with rtt {rtt}");
+        // log::info!("apply sync from {from:?} with rtt {rtt}");
         for layer in 0..MODEL_LAYERS {
             if let Some(Some(info)) = sync.layers.get(layer) {
                 let mut info = info.clone();
