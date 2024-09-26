@@ -183,7 +183,10 @@ pub async fn chat_completions(Json(req): Json<ChatCompletionRequest>, data: Data
                         }
                     ]
                 });
-                stream_tx.send(response.to_string()).await.unwrap();
+                if let Err(e) = stream_tx.send(response.to_string()).await {
+                    log::error!("error sending message: {}", e);
+                    break;
+                }
             }
         });
 

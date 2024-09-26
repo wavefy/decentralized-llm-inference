@@ -7,7 +7,7 @@ use std::{
 };
 
 use api_chat::{chat_completions, get_model, list_models};
-use api_status::{p2p_start, p2p_status, p2p_stop, P2pState};
+use api_status::{p2p_start, p2p_status, p2p_stop, p2p_suggest_layers, P2pState};
 use candle_core::DType;
 use models::{fake, get_device, llama, phi3, ChatModel};
 use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
@@ -24,6 +24,7 @@ mod api_status;
 pub async fn start_control_server(control_http_bind: SocketAddr, registry_server: &str, node_id: &str, openai_http_bind: SocketAddr, stun_server: &str) {
     let app = Route::new()
         .at("/v1/p2p/status", poem::get(p2p_status))
+        .at("/v1/p2p/suggest_layers", poem::get(p2p_suggest_layers))
         .at("/v1/p2p/start", poem::post(p2p_start))
         .at("/v1/p2p/stop", poem::post(p2p_stop))
         .data(P2pState {
@@ -75,6 +76,7 @@ pub struct WorkerStatus {
 
 pub enum WorkerControl {
     Status(oneshot::Sender<WorkerStatus>),
+    Stop(oneshot::Sender<()>),
 }
 
 async fn run<const MODEL_LAYERS: usize>(worker: &mut WorkerRunner<MODEL_LAYERS>, model_exe: Arc<dyn ChatModel>, http_bind: SocketAddr, mut query_rx: Receiver<WorkerControl>) {
@@ -84,7 +86,7 @@ async fn run<const MODEL_LAYERS: usize>(worker: &mut WorkerRunner<MODEL_LAYERS>,
         .at("/v1/models/:model_id", poem::get(get_model))
         .with(Cors::new());
 
-    tokio::spawn(async move { Server::new(TcpListener::bind(http_bind)).run(app).await });
+    let http_server = tokio::spawn(async move { Server::new(TcpListener::bind(http_bind)).run(app).await });
 
     loop {
         tokio::select! {
@@ -102,6 +104,11 @@ async fn run<const MODEL_LAYERS: usize>(worker: &mut WorkerRunner<MODEL_LAYERS>,
                         peers: worker.peers().iter().map(|p| p.to_string()).collect::<Vec<_>>(),
                         sessions: worker.sessions(),
                     }).unwrap();
+                }
+                Some(WorkerControl::Stop(sender)) => {
+                    sender.send(()).unwrap();
+                    http_server.abort();
+                    break;
                 }
                 None => {
                     log::error!("[OpenAIServer] query rx closed");

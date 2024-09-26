@@ -16,3 +16,4 @@ registry = { path = "../registry", version = "0.1.0", default-features = false, 
 usage-service = { path = "../usage-service", version = "0.1.0" }
 prost = { workspace = true }
 spin = { workspace = true }
+utils = { path = "../utils", version = "0.1.0" }

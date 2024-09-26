@@ -15,4 +15,4 @@ serde_json = { workspace = true }
 serde_bytes = { version = "0.11.5" }
 usage-service = { path = "../usage-service", version = "0.1.0" }
 protocol = { path = "../protocol", version = "0.1.0" }
-spin = { workspace = true }
+utils = { path = "../utils", version = "0.1.0" }

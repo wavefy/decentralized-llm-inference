@@ -132,14 +132,19 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
             next_token = logits_processor.sample(&logits)?;
             all_tokens.push(next_token);
             if let Some(t) = tos.next_token(next_token)? {
-                tx.send(t).await.unwrap();
+                if let Err(e) = tx.send(t).await {
+                    log::error!("error sending message: {}", e);
+                    break;
+                }
             }
             if next_token == eos_token {
                 break;
             };
         }
         if let Some(rest) = tos.decode_rest().map_err(candle_core::Error::msg)? {
-            tx.send(rest).await.unwrap();
+            if let Err(e) = tx.send(rest).await {
+                log::error!("error sending message: {}", e);
+            }
         }
         self.layers_worker.finish(session).await;
         Ok(())

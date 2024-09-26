@@ -1,7 +1,7 @@
 use clap::Parser;
 use contract::{
     aptos_sdk::{rest_client::AptosBaseUrl, types::LocalAccount},
-    OnChainService, CONTRACT_ADDRESS,
+    OnChainService,
 };
 use openai_server::{start_control_server, start_server};
 use std::{net::SocketAddr, sync::Arc};
@@ -45,7 +45,7 @@ struct Args {
     layers_to: Option<u32>,
 
     /// Private key
-    #[arg(env, long, default_value = "0x69d91353993001d80ef74f7a27fcb15456d4d6298c755a5316a0a0d87b6b39b9")]
+    #[arg(env, long)]
     private_key: Option<String>,
 }
 

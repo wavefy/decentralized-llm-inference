@@ -19,6 +19,7 @@ tokenizers = { workspace = true, features = ["onig"] }
 tokio = { workspace = true, features = ["sync"] }
 rand = { workspace = true }
 spin = { workspace = true }
+utils = { path = "../utils" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

@@ -1,12 +1,13 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use candle_nn::kv_cache::KvCache;
-use spin::{Mutex, RwLock};
+use spin::Mutex;
+use utils::shared_map::SharedHashMap;
 
 use crate::Session;
 
 pub struct LayersCache {
-    layers_cache: Vec<RwLock<HashMap<Session, Arc<Mutex<KvCache>>>>>,
+    layers_cache: Vec<SharedHashMap<Session, Arc<Mutex<KvCache>>>>,
     dim: usize,
     max_seq_len: usize,
 }
@@ -21,14 +22,14 @@ impl LayersCache {
     }
 
     pub fn add_cache(&self, idx: usize, session: Session) {
-        self.layers_cache[idx].write().insert(session, Arc::new(Mutex::new(KvCache::new(self.dim, self.max_seq_len))));
+        self.layers_cache[idx].insert(session, Arc::new(Mutex::new(KvCache::new(self.dim, self.max_seq_len))));
     }
 
     pub fn get_cache(&self, idx: usize, session: Session) -> Arc<Mutex<KvCache>> {
-        self.layers_cache[idx].read().get(&session).unwrap().clone()
+        self.layers_cache[idx].get_clone(&session).unwrap()
     }
 
     pub fn del_cache(&self, idx: usize, session: Session) {
-        self.layers_cache[idx].write().remove(&session);
+        self.layers_cache[idx].remove(&session);
     }
 }

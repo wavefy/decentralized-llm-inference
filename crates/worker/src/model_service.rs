@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Range, sync::Arc};
+use std::{ops::Range, sync::Arc};
 
 use candle_core::{Device, Tensor};
 use model_router::RouteTable;
@@ -7,15 +7,13 @@ use p2p_network::addr::NodeId;
 use prost::Message;
 use protocol::{
     llm::*,
-    worker::{
-        self,
-        event::{RpcReq, RpcRes},
-    },
+    worker::event::{RpcReq, RpcRes},
     Session,
 };
 use spin::RwLock;
-use tokio::sync::{mpsc::Sender, oneshot};
+use tokio::sync::oneshot;
 use usage_service::WorkerUsageService;
+use utils::shared_map::SharedHashMap;
 
 use crate::{rpc::RpcClientTx, ServiceHandler};
 
@@ -41,7 +39,7 @@ pub struct ModelService<LW, const MODEL_LAYERS: usize> {
     device: Device,
     layers: LW,
     rpc: RpcClientTx,
-    sessions: RwLock<HashMap<Session, SessionContainer>>,
+    sessions: SharedHashMap<Session, SessionContainer>,
     router: Arc<RwLock<RouteTable<NodeId, MODEL_LAYERS>>>,
     usage_service: Arc<dyn WorkerUsageService>,
 }
@@ -62,7 +60,7 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
 #[async_trait::async_trait]
 impl<LW: ModelLayersWorker<(Tensor, u32)>, const MODEL_LAYERS: usize> ServiceHandler<MODEL_LAYERS> for ModelService<LW, MODEL_LAYERS> {
     fn sessions(&self) -> Vec<u64> {
-        self.sessions.read().keys().cloned().into_iter().map(|s| *s).collect()
+        self.sessions.keys_clone().into_iter().map(|s| *s).collect()
     }
 
     async fn on_req(&self, _from: NodeId, req: RpcReq) -> RpcRes {
@@ -110,7 +108,7 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
                 return StartRes { success: false, metadata: vec![] };
             };
 
-            self.sessions.write().insert(
+            self.sessions.insert(
                 Session(req.session),
                 SessionContainer {
                     chat_id: req.chat_id,
@@ -170,7 +168,7 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
     }
 
     pub async fn forward(&self, req: ForwardReq) -> ForwardRes {
-        let res = if let Some(container) = self.sessions.read().get(&Session(req.session)).cloned() {
+        let res = if let Some(container) = self.sessions.get_clone(&Session(req.session)) {
             if let Ok(req) = self.usage_service.pre_forward(container.chat_id, req.clone()).await {
                 log::info!("[ModelService] session {} forward step {} processing ...", req.session, req.step);
                 let embedding = if let Some(layers) = container.local {
@@ -238,7 +236,7 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
     }
 
     pub async fn end(&self, req: EndReq) -> EndRes {
-        if let Some(container) = self.sessions.write().remove(&Session(req.session)) {
+        if let Some(container) = self.sessions.remove(&Session(req.session)) {
             if let Ok(req) = self.usage_service.pre_end(container.chat_id, req.clone()).await {
                 log::warn!("[ModelService] session {} ending ...", req.session);
                 if let Some(layers) = container.local {

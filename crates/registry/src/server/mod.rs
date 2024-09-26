@@ -2,7 +2,7 @@ use p2p_network::addr::NodeId;
 use poem::{
     get, handler,
     listener::TcpListener,
-    web::{websocket::WebSocket, Data, Path},
+    web::{websocket::WebSocket, Data, Json, Path},
     EndpointExt, IntoResponse, Route, Server,
 };
 use protobuf_stream::ProtobufStream;
@@ -14,12 +14,13 @@ mod session_manager;
 
 use session_manager::SessionManager;
 
-use crate::ModelId;
+use crate::{ModelDistribution, ModelId};
 
 enum StreamEvent {
     Start(ModelId, NodeId, Sender<protocol::registry::to_worker::Event>),
     Event(ModelId, NodeId, protocol::registry::to_registry::Event),
     End(ModelId, NodeId),
+    Distribution(ModelId, Sender<ModelDistribution>),
 }
 
 pub struct RegistryServer {
@@ -33,7 +34,9 @@ impl RegistryServer {
         let (stream_tx, stream_rx) = channel(10);
         tokio::spawn(async move {
             log::info!("[RegistryServer] listen on ws://{http_addr}");
-            let app = Route::new().at("/ws/:model/:node", get(ws.data(stream_tx)));
+            let app = Route::new()
+                .at("/api/:model/distribution", get(distribution.data(stream_tx.clone())))
+                .at("/ws/:model/:node", get(ws.data(stream_tx)));
 
             Server::new(TcpListener::bind(http_addr)).run(app).await
         });
@@ -77,9 +80,24 @@ impl RegistryServer {
                 let entry = self.models.entry(model).or_default();
                 entry.on_end(node);
             }
+            StreamEvent::Distribution(model, tx) => {
+                let res: ModelDistribution = self.models.get(&model).map(|m| m.get_distribution()).unwrap_or_default();
+                if let Err(e) = tx.send(res).await {
+                    log::error!("[RegistryServer] send distribution to stream error {e:?}");
+                }
+            }
         }
         Some(())
     }
+}
+
+#[handler]
+async fn distribution(Path(model): Path<String>, stream_tx: Data<&Sender<StreamEvent>>) -> impl IntoResponse {
+    let model_id = ModelId(model.clone());
+    let (tx, mut rx) = channel(10);
+    stream_tx.send(StreamEvent::Distribution(model_id.clone(), tx)).await.expect("Should send event main");
+    let res = rx.recv().await.unwrap();
+    Json(res).into_response()
 }
 
 #[handler]

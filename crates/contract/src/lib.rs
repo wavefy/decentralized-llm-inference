@@ -1,12 +1,11 @@
 pub mod client;
 pub mod storage;
 
-use std::sync::Arc;
 use anyhow::{Error, Result};
 pub use aptos_sdk;
 use aptos_sdk::rest_client::{aptos_api_types::Address, error::RestError, Response, Transaction};
 use protocol::llm::{EndReq, EndRes, ForwardReq, ForwardRes, StartReq, StartRes};
-use tokio::sync::RwLock;
+use std::sync::Arc;
 use usage_service::WorkerUsageService;
 
 pub const CONTRACT_ADDRESS: &str = "0x9123e2561d81ba5f77473b8dc664fa75179c841061d12264508894610b9d0b7a";
@@ -16,14 +15,14 @@ pub enum OnChainEvent {
 }
 
 pub struct OnChainService {
-    storage: RwLock<storage::OnChainStorage>,
+    storage: storage::OnChainStorage,
     client: Arc<client::OnChainClient>,
 }
 
 impl OnChainService {
     pub fn new(account: aptos_sdk::types::LocalAccount, chain: aptos_sdk::rest_client::AptosBaseUrl) -> Self {
         let client = Arc::new(client::OnChainClient::new(account, chain, CONTRACT_ADDRESS));
-        let storage = RwLock::new(storage::OnChainStorage::new());
+        let storage = storage::OnChainStorage::new();
         Self { client, storage }
     }
 
@@ -36,7 +35,7 @@ impl OnChainService {
     }
 
     pub async fn increment_chat_token_count(&self, chat_id: u64, token_count: u64) {
-        self.storage.write().await.increment_chat_token_count(chat_id, token_count);
+        self.storage.increment_chat_token_count(chat_id, token_count);
     }
 
     pub async fn create_session(&self, chat_id: u64, exp: u64, max_token: u64, participants: Vec<Address>) -> Result<Response<Transaction>, RestError> {
@@ -44,7 +43,7 @@ impl OnChainService {
     }
 
     pub async fn commit_token_count(&self, chat_id: u64) -> Result<Response<Transaction>, RestError> {
-        let token_count = self.storage.read().await.get_chat_token_count(chat_id);
+        let token_count = self.storage.get_chat_token_count(chat_id);
         log::info!("[OnChainService] commit_token_count: {token_count}");
 
         let onchain_session_id = self.client.get_session_id(self.client.account.address().into(), chat_id).await?;
@@ -52,14 +51,14 @@ impl OnChainService {
     }
 
     pub async fn claim_tokens(&self, chat_id: u64, client_address: Address) -> Result<Response<Transaction>, RestError> {
-        let token_count = self.storage.read().await.get_chat_token_count(chat_id);
+        let token_count = self.storage.get_chat_token_count(chat_id);
         log::info!("[OnChainService] claim token: {token_count}");
         let onchain_session_id = self.client.get_session_id(client_address, chat_id).await?;
         self.client.claim_tokens(client_address, onchain_session_id, token_count).await
     }
 
     pub async fn get_chat_token_count(&self, chat_id: u64) -> u64 {
-        self.storage.read().await.get_chat_token_count(chat_id)
+        self.storage.get_chat_token_count(chat_id)
     }
 
     pub async fn get_session_id(&self, chat_id: u64) -> Result<u64, RestError> {

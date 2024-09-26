@@ -18,6 +18,7 @@ protocol = { path = "../../crates/protocol", version = "0.1.0" }
 models = { path = "../../crates/models", version = "0.1.0" }
 contract = { path = "../../crates/contract", version = "0.1.0" }
 usage-service = { path = "../../crates/usage-service", version = "0.1.0" }
+registry = { path = "../../crates/registry", version = "0.1.0" }
 
 [features]
 metal = ["models/metal"]

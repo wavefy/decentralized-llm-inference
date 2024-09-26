@@ -1,12 +1,12 @@
-import {modelDetails, OpenAIModel} from "../models/model";
-import {ChatCompletion, ChatCompletionMessage, ChatCompletionRequest, ChatMessage, ChatMessagePart, Role} from "../models/ChatCompletion";
-import {OPENAI_API_KEY} from "../config";
-import {CustomError} from "./CustomError";
-import {CHAT_COMPLETIONS_ENDPOINT, MODELS_ENDPOINT} from "../constants/apiEndpoints";
-import {ChatSettings} from "../models/ChatSettings";
-import {CHAT_STREAM_DEBOUNCE_TIME, DEFAULT_MODEL} from "../constants/appConstants";
-import {NotificationService} from '../service/NotificationService';
-import { FileData, FileDataRef } from "../models/FileData";
+import { modelDetails, OpenAIModel } from "../models/model";
+import { ChatCompletion, ChatCompletionMessage, ChatCompletionRequest, ChatMessage, ChatMessagePart, Role } from "../models/ChatCompletion";
+import { OPENAI_API_KEY } from "../config";
+import { CustomError } from "./CustomError";
+import { CHAT_COMPLETIONS_ENDPOINT, MODELS_ENDPOINT } from "../constants/apiEndpoints";
+import { ChatSettings } from "../models/ChatSettings";
+import { CHAT_STREAM_DEBOUNCE_TIME, DEFAULT_MODEL } from "../constants/appConstants";
+import { NotificationService } from '../service/NotificationService';
+import { FileDataRef } from "../models/FileData";
 
 interface CompletionChunk {
   id: string;
@@ -70,7 +70,7 @@ export class ChatService {
       "Authorization": `Bearer ${OPENAI_API_KEY}`
     };
 
-    const mappedMessages = await ChatService.mapChatMessagesToCompletionMessages(modelId,messages);
+    const mappedMessages = await ChatService.mapChatMessagesToCompletionMessages(modelId, messages);
 
     const requestBody: ChatCompletionRequest = {
       model: modelId,
@@ -105,7 +105,7 @@ export class ChatService {
       }
 
       this.callDeferred = window.setTimeout(() => {
-        callback(this.accumulatedContent,[]); // Pass the accumulated content to the original callback
+        callback(this.accumulatedContent, []); // Pass the accumulated content to the original callback
         this.lastCallbackTime = Date.now();
         this.accumulatedContent = ""; // Reset the accumulated content after the callback is called
       }, delay - timeSinceLastCall < 0 ? 0 : delay - timeSinceLastCall);  // Ensure non-negative delay
@@ -114,7 +114,7 @@ export class ChatService {
     };
   }
 
-  static async sendMessageStreamed(chatSettings: ChatSettings, messages: ChatMessage[], callback: (content: string,fileDataRef: FileDataRef[]) => void): Promise<any> {
+  static async sendMessageStreamed(chatSettings: ChatSettings, messages: ChatMessage[], callback: (content: string, fileDataRef: FileDataRef[]) => void): Promise<any> {
     const debouncedCallback = this.debounceCallback(callback);
     this.abortController = new AbortController();
     let endpoint = CHAT_COMPLETIONS_ENDPOINT;
@@ -130,14 +130,14 @@ export class ChatService {
     };
 
     if (chatSettings) {
-      const {model, temperature, top_p, seed} = chatSettings;
+      const { model, temperature, top_p, seed } = chatSettings;
       requestBody.model = model ?? requestBody.model;
       requestBody.temperature = temperature ?? requestBody.temperature;
       requestBody.top_p = top_p ?? requestBody.top_p;
       requestBody.seed = seed ?? requestBody.seed;
     }
 
-    const mappedMessages = await ChatService.mapChatMessagesToCompletionMessages(requestBody.model,messages);
+    const mappedMessages = await ChatService.mapChatMessagesToCompletionMessages(requestBody.model, messages);
     requestBody.messages = mappedMessages;
 
     let response: Response;
@@ -179,7 +179,7 @@ export class ChatService {
       try {
         while (true) {
           const streamChunk = await reader.read();
-          const {done, value} = streamChunk;
+          const { done, value } = streamChunk;
           if (done) {
             break;
           }
@@ -293,52 +293,47 @@ export class ChatService {
   }
 
 
-  static fetchModels = (): Promise<OpenAIModel[]> => {
+  static fetchModels = async (): Promise<OpenAIModel[]> => {
     if (this.models !== null) {
       return Promise.resolve(this.models);
     }
-    this.models = fetch(MODELS_ENDPOINT, {
+    console.log('fetchModels', MODELS_ENDPOINT);
+    const response = await fetch(MODELS_ENDPOINT, {
       headers: {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
       },
     })
-        .then(response => {
-          if (!response.ok) {
-            return response.json().then(err => {
-              throw new Error(err.error.message);
-            });
-          }
-          return response.json();
-        })
-        .catch(err => {
-          throw new Error(err.message || err);
-        })
-        .then(data => {
-          const models: OpenAIModel[] = data.data;
-          console.log(data.data)
-          // Filter, enrich with contextWindow from the imported constant, and sort
-          return models
-              // .filter(model => model.id.startsWith("gpt-"))
-              .map(model => {
-                const details = modelDetails[model.id] || {
-                  contextWindowSize: 0,
-                  knowledgeCutoffDate: '',
-                  imageSupport: false,
-                  preferred: false,
-                  deprecated: false,
-                };
-                return {
-                  ...model,
-                  context_window: details.contextWindowSize,
-                  knowledge_cutoff: details.knowledgeCutoffDate,
-                  image_support: details.imageSupport,
-                  preferred: details.preferred,
-                  deprecated: details.deprecated,
-                };
-              })
-              .sort((a, b) => b.id.localeCompare(a.id));
-        });
-    return this.models;
+    const responseJson: any = await response.json().catch(err => {
+      throw new Error(err.message || err);
+    });
+
+    if (!response.ok) {
+      throw new Error(responseJson.error.message);
+    }
+
+    // Filter, enrich with contextWindow from the imported constant, and sort
+    const models = (responseJson.data as OpenAIModel[])
+      .map(model => {
+        const details = modelDetails[model.id] || {
+          contextWindowSize: 0,
+          knowledgeCutoffDate: '',
+          imageSupport: false,
+          preferred: false,
+          deprecated: false,
+        };
+        return {
+          ...model,
+          context_window: details.contextWindowSize,
+          knowledge_cutoff: details.knowledgeCutoffDate,
+          image_support: details.imageSupport,
+          preferred: details.preferred,
+          deprecated: details.deprecated,
+        };
+      })
+      .sort((a, b) => b.id.localeCompare(a.id));
+
+    this.models = models as any;
+    return this.models as any;
   };
 }
 

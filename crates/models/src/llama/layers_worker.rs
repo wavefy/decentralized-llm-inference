@@ -1,8 +1,9 @@
-use std::{collections::HashMap, ops::Range, sync::Arc};
+use std::{ops::Range, sync::Arc};
 
 use candle_core::{DType, Device, Result, Tensor};
 use candle_nn::VarBuilder;
-use spin::{Mutex, RwLock};
+use spin::Mutex;
+use utils::shared_map::SharedHashMap;
 
 use crate::{ModelLayersWorker, Session};
 
@@ -12,7 +13,7 @@ use super::{
 };
 
 pub struct LlamaLayersWorker {
-    caches: RwLock<HashMap<Session, Arc<Mutex<Cache>>>>,
+    caches: SharedHashMap<Session, Arc<Mutex<Cache>>>,
     llama: LlamaLayers,
     cfg: Config,
     dtype: DType,
@@ -36,18 +37,18 @@ impl LlamaLayersWorker {
 impl ModelLayersWorker<(Tensor, u32)> for LlamaLayersWorker {
     async fn start(&self, session: Session) -> Result<()> {
         let cache = Cache::new(USE_KV_CACHE, self.dtype, &self.cfg, &self.device).unwrap();
-        self.caches.write().insert(session, Arc::new(Mutex::new(cache)));
+        self.caches.insert(session, Arc::new(Mutex::new(cache)));
         Ok(())
     }
 
     async fn forward(&self, session: Session, _step: u32, (xs, seq_len): (Tensor, u32), index_pos: u32) -> Result<(Tensor, u32)> {
-        let cache = self.caches.read().get(&session).cloned().unwrap();
+        let cache = self.caches.get_clone(&session).unwrap();
         let mut cache_mut = cache.lock();
         let res = self.llama.forward(xs, index_pos as usize, &mut cache_mut)?;
         Ok((res, seq_len))
     }
 
     async fn finish(&self, session: Session) {
-        self.caches.write().remove(&session);
+        self.caches.remove(&session);
     }
 }
