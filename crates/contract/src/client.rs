@@ -80,6 +80,10 @@ impl OnChainClient {
         self.client_send(payload).await
     }
 
+    pub async fn my_session_id(&self, uuid: u64) -> Result<u64, RestError> {
+        self.get_session_id(self.account.address().into(), uuid).await
+    }
+
     pub async fn get_session_id(&self, client_address: Address, uuid: u64) -> Result<u64, RestError> {
         let view_func = ViewFunction {
             module: ModuleId::new(self.contract_address.clone().into(), ident_str!("dllm").into()),

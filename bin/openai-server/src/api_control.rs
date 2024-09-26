@@ -24,6 +24,7 @@ pub struct ModelState {
     from_layer: u32,
     to_layer: u32,
     query_tx: Sender<WorkerControl>,
+    wallet: Arc<OnChainService>,
 }
 
 #[derive(Clone)]
@@ -45,11 +46,11 @@ struct ModelConfig {
 #[derive(Debug, Serialize)]
 struct P2pStatusRes {
     model: Option<ModelConfig>,
-    spent: u64,
-    earned: u64,
-    balance: u64,
-    peers: u32,
-    sessions: u32,
+    spending: Option<u64>,
+    earning: Option<u64>,
+    balance: Option<u64>,
+    peers: Option<u32>,
+    sessions: Option<u32>,
     status: String,
 }
 
@@ -60,6 +61,9 @@ pub async fn p2p_status(data: Data<&P2pState>) -> Response {
         let (tx, rx) = oneshot::channel();
         model.query_tx.send(WorkerControl::Status(tx)).await.unwrap();
         let status = rx.await.unwrap();
+        let balance = model.wallet.current_balance().await;
+        let earning = model.wallet.earning_token_count();
+        let spending = model.wallet.spending_token_count();
 
         P2pStatusRes {
             status: if status.ready {
@@ -73,21 +77,21 @@ pub async fn p2p_status(data: Data<&P2pState>) -> Response {
                 from_layer: model.from_layer,
                 to_layer: model.to_layer,
             }),
-            spent: 0,
-            earned: 0,
-            balance: 0,
-            peers: status.peers.len() as u32,
-            sessions: status.sessions.len() as u32,
+            spending: Some(spending),
+            earning: Some(earning),
+            balance: balance,
+            peers: Some(status.peers.len() as u32),
+            sessions: Some(status.sessions.len() as u32),
         }
     } else {
         P2pStatusRes {
             status: "stopped".to_string(),
             model: None,
-            spent: 0,
-            earned: 0,
-            balance: 0,
-            peers: 0,
-            sessions: 0,
+            spending: None,
+            earning: None,
+            balance: None,
+            peers: None,
+            sessions: None,
         }
     };
 
@@ -124,16 +128,18 @@ pub async fn p2p_start(body: Json<P2pStart>, data: Data<&P2pState>) -> Response 
     onchain_service.init().await;
 
     let usage_service = Arc::new(onchain_service);
+    let wallet = usage_service.clone();
     tokio::spawn(async move {
         start_server(&registry_server, &model, &node_id, range, http_bind, &stun_server, query_rx, usage_service).await;
     });
-    let model = ModelState {
+    let model_state = ModelState {
         model: body.model.clone(),
         from_layer: body.from_layer,
         to_layer: body.to_layer,
         query_tx,
+        wallet,
     };
-    *current_model = Some(model);
+    *current_model = Some(model_state);
     Response::builder().status(StatusCode::OK).body(Body::from_json(&P2pStartRes {}).unwrap())
 }
 

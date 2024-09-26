@@ -17,11 +17,11 @@ export interface P2pConfig {
 
 export interface P2pStatus {
     model?: P2pConfig,
-    spent: number,
-    earned: number,
-    balance: number,
-    peers: number,
-    sessions: number,
+    spending?: number,
+    earning?: number,
+    balance?: number,
+    peers?: number,
+    sessions?: number,
     status: string,
 }
 

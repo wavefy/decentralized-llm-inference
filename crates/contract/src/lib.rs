@@ -15,15 +15,19 @@ pub enum OnChainEvent {
 }
 
 pub struct OnChainService {
-    storage: storage::OnChainStorage,
+    earning: storage::OnChainStorage,
+    spending: storage::OnChainStorage,
     client: Arc<client::OnChainClient>,
 }
 
 impl OnChainService {
     pub fn new(account: aptos_sdk::types::LocalAccount, chain: aptos_sdk::rest_client::AptosBaseUrl) -> Self {
         let client = Arc::new(client::OnChainClient::new(account, chain, CONTRACT_ADDRESS));
-        let storage = storage::OnChainStorage::new();
-        Self { client, storage }
+        Self {
+            client,
+            earning: storage::OnChainStorage::new(),
+            spending: storage::OnChainStorage::new(),
+        }
     }
 
     pub async fn init(&self) {
@@ -31,38 +35,31 @@ impl OnChainService {
         log::info!("[OnChainWorker] onchain initialized");
         let current_balance = self.client.get_current_balance().await.expect("Failed to get current balance");
 
-        log::info!("[OpenAIServer] current balance: {current_balance}");
-    }
-
-    pub async fn increment_chat_token_count(&self, chat_id: u64, token_count: u64) {
-        self.storage.increment_chat_token_count(chat_id, token_count);
+        log::info!("[OnChainWorker] current balance: {current_balance}");
     }
 
     pub async fn create_session(&self, chat_id: u64, exp: u64, max_token: u64, participants: Vec<Address>) -> Result<Response<Transaction>, RestError> {
         self.client.create_session(chat_id, exp, max_token, participants).await
     }
 
-    pub async fn commit_token_count(&self, chat_id: u64) -> Result<Response<Transaction>, RestError> {
-        let token_count = self.storage.get_chat_token_count(chat_id);
-        log::info!("[OnChainService] commit_token_count: {token_count}");
+    pub async fn commit_session(&self, chat_id: u64) -> Result<Response<Transaction>, RestError> {
+        let token_count = self.spending.finish(chat_id);
+        log::info!("[OnChainService] commit token: {token_count}");
 
-        let onchain_session_id = self.client.get_session_id(self.client.account.address().into(), chat_id).await?;
+        let onchain_session_id = self.client.my_session_id(chat_id).await?;
         self.client.update_token_count(onchain_session_id, token_count).await
     }
 
-    pub async fn claim_tokens(&self, chat_id: u64, client_address: Address) -> Result<Response<Transaction>, RestError> {
-        let token_count = self.storage.get_chat_token_count(chat_id);
-        log::info!("[OnChainService] claim token: {token_count}");
-        let onchain_session_id = self.client.get_session_id(client_address, chat_id).await?;
-        self.client.claim_tokens(client_address, onchain_session_id, token_count).await
+    pub async fn current_balance(&self) -> Option<u64> {
+        self.client.get_current_balance().await.ok()
     }
 
-    pub async fn get_chat_token_count(&self, chat_id: u64) -> u64 {
-        self.storage.get_chat_token_count(chat_id)
+    pub fn spending_token_count(&self) -> u64 {
+        self.spending.sum()
     }
 
-    pub async fn get_session_id(&self, chat_id: u64) -> Result<u64, RestError> {
-        self.client.get_session_id(self.client.account.address().into(), chat_id).await
+    pub fn earning_token_count(&self) -> u64 {
+        self.earning.sum()
     }
 }
 
@@ -130,7 +127,7 @@ impl WorkerUsageService for OnChainService {
                 addresses: vec![],
                 root_address: address.into(),
             };
-            if let Err(e) = self.commit_token_count(chat_id).await {
+            if let Err(e) = self.commit_session(chat_id).await {
                 log::error!("[OnChainService] Failed to commit token count: {e:?}");
                 return Err(Error::from(e));
             }
@@ -147,24 +144,34 @@ impl WorkerUsageService for OnChainService {
 
     async fn post_end(&self, chat_id: u64, req: EndReq, res: EndRes) -> EndRes {
         if req.chain_index != 0 {
+            // this is earning
             let metadata = serde_json::from_str::<OnChainServiceMetadata>(&String::from_utf8(req.metadata).unwrap()).expect("Should be able to parse metadata");
-            let token_count = self.get_chat_token_count(chat_id).await;
-            if let Ok(onchain_session_id) = self.get_session_id(chat_id).await {
-                let client = self.client.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = client.claim_tokens(metadata.root_address, onchain_session_id, token_count).await {
-                        log::error!("[OnChainService] Failed to claim tokens: {e:?}");
-                    } else {
-                        log::info!("[OnChainService] Successfully claim tokens");
+            let client = self.client.clone();
+            let token_count = self.earning.finish(chat_id);
+
+            tokio::spawn(async move {
+                log::info!("[OnChainService] claim token: {token_count}");
+                if let Ok(onchain_session_id) = client.my_session_id(chat_id).await {
+                    match client.claim_tokens(metadata.root_address, onchain_session_id, token_count).await {
+                        Ok(tran) => {
+                            log::info!("[OnChainService] Successfully claim {token_count} tokens");
+                        }
+                        Err(e) => {
+                            log::error!("[OnChainService] Failed to claim tokens: {e:?}");
+                        }
                     }
-                });
-            }
+                }
+            });
         }
         res
     }
 
     async fn pre_forward(&self, chat_id: u64, req: ForwardReq) -> Result<ForwardReq> {
-        self.increment_chat_token_count(chat_id, 1).await;
+        if req.chain_index == 0 {
+            self.spending.increase(chat_id, 1);
+        } else {
+            self.earning.increase(chat_id, 1);
+        }
         Ok(req)
     }
 

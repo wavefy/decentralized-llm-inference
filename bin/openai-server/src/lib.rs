@@ -1,25 +1,20 @@
 use std::{
-    env,
     net::{SocketAddr, ToSocketAddrs},
     ops::Range,
-    str::FromStr,
     sync::Arc,
 };
 
 use api_chat::{chat_completions, get_model, list_models};
-use api_status::{p2p_start, p2p_status, p2p_stop, p2p_suggest_layers, P2pState};
+use api_control::{p2p_start, p2p_status, p2p_stop, p2p_suggest_layers, P2pState};
 use candle_core::DType;
 use models::{fake, get_device, llama, phi3, ChatModel};
 use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
-use tokio::{
-    signal,
-    sync::{mpsc::{channel, Receiver}, oneshot, Mutex},
-};
+use tokio::sync::{mpsc::Receiver, oneshot, Mutex};
 use usage_service::WorkerUsageService;
-use worker::{WorkerEvent, WorkerEventWithResp, WorkerRunner};
+use worker::WorkerRunner;
 
 mod api_chat;
-mod api_status;
+mod api_control;
 
 pub async fn start_control_server(control_http_bind: SocketAddr, registry_server: &str, node_id: &str, openai_http_bind: SocketAddr, stun_server: &str) {
     let app = Route::new()
@@ -39,7 +34,16 @@ pub async fn start_control_server(control_http_bind: SocketAddr, registry_server
     Server::new(TcpListener::bind(control_http_bind)).run(app).await.unwrap();
 }
 
-pub async fn start_server(registry_server: &str, model: &str, node_id: &str, layers: Range<u32>, http_bind: SocketAddr, stun_server: &str, query_rx: Receiver<WorkerControl>, usage_service: Arc<dyn WorkerUsageService>) {
+pub async fn start_server(
+    registry_server: &str,
+    model: &str,
+    node_id: &str,
+    layers: Range<u32>,
+    http_bind: SocketAddr,
+    stun_server: &str,
+    query_rx: Receiver<WorkerControl>,
+    usage_service: Arc<dyn WorkerUsageService>,
+) {
     let stun_servers = stun_server.to_socket_addrs().unwrap().collect::<Vec<_>>();
     log::info!("[OpenAIServer] start with model {} and stun server {}", model, stun_server);
     let device = get_device(false).unwrap();
