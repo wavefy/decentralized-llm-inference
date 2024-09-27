@@ -90,7 +90,15 @@ async fn run<const MODEL_LAYERS: usize>(worker: &mut WorkerRunner<MODEL_LAYERS>,
         .at("/v1/models/:model_id", poem::get(get_model))
         .with(Cors::new());
 
-    let http_server = tokio::spawn(async move { Server::new(TcpListener::bind(http_bind)).run(app).await });
+    let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
+
+    tokio::spawn(async move {
+        let shutdown_signal = async {
+            shutdown_rx.await;
+        };
+
+        Server::new(TcpListener::bind(http_bind)).run_with_graceful_shutdown(app, shutdown_signal, None).await
+    });
 
     loop {
         tokio::select! {
@@ -110,8 +118,10 @@ async fn run<const MODEL_LAYERS: usize>(worker: &mut WorkerRunner<MODEL_LAYERS>,
                     }).unwrap();
                 }
                 Some(WorkerControl::Stop(sender)) => {
+                    log::info!("[OpenAIServer] p2p_stop: sending stop ack signal");
                     sender.send(()).unwrap();
-                    http_server.abort();
+                    shutdown_tx.send(()).unwrap();
+                    log::info!("[OpenAIServer] p2p_stop: stop ack signal received");
                     break;
                 }
                 None => {

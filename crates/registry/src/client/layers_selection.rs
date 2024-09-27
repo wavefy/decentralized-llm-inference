@@ -32,6 +32,10 @@ pub fn select_layers(distribution: &[usize], layers: u32) -> LayerSelectionRes {
         _ => {}
     }
 
+    if layers >= distribution.len() as u32 {
+        return LayerSelectionRes::EnoughLayers { ranges: 0..distribution.len() as u32 };
+    }
+
     // we select best layers by sum of continunes n layers, with n is the number of layers
     // then select the first smallest range
     let sum_layers = sum_in_window(distribution, layers as usize);
@@ -43,6 +47,8 @@ pub fn select_layers(distribution: &[usize], layers: u32) -> LayerSelectionRes {
 }
 
 fn sum_in_window(data: &[usize], window_size: usize) -> Vec<usize> {
+    assert!(window_size > 0);
+    assert!(window_size < data.len());
     let mut result = Vec::new();
     for i in 0..(data.len() - window_size + 1) {
         let mut sum = 0;
