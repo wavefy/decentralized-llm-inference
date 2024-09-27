@@ -5,7 +5,10 @@ use std::{
     task::{Context, Poll},
 };
 
-use models::{ChatCfg, ChatModel};
+use models::{
+    http_api::{ChatCompletionRequest, Model, ModelList},
+    ChatCfg, ChatModel,
+};
 use poem::{
     handler,
     http::StatusCode,
@@ -13,50 +16,13 @@ use poem::{
     Body, Error, IntoResponse, Response,
 };
 use protocol::Session;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::{
     io::AsyncRead,
     sync::mpsc::{channel, Receiver, Sender},
 };
 
-#[derive(Debug, Deserialize, Serialize)]
-struct MessageContent {
-    #[serde(rename = "type")]
-    _type: String,
-    text: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct Message {
-    role: String,
-    content: Vec<MessageContent>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ChatCompletionRequest {
-    model: String,
-    messages: Vec<Message>,
-    temperature: Option<f32>,
-    max_tokens: Option<i32>,
-    stream: Option<bool>,
-}
-
-#[derive(Debug, Serialize)]
-struct Model {
-    id: String,
-    object: String,
-    created: i64,
-    owned_by: String,
-}
-
-#[derive(Debug, Serialize)]
-struct ModelList {
-    object: String,
-    data: Vec<Model>,
-}
-
-const MODELS: [&str; 1] = ["phi3"];
+const MODELS: [&str; 1] = ["local-model"];
 
 struct AsyncReadRx {
     rx: Receiver<String>,
@@ -164,7 +130,7 @@ pub async fn chat_completions(Json(req): Json<ChatCompletionRequest>, data: Data
     }
     let stream = req.stream.unwrap_or(false);
 
-    let prompt = build_prompt(&req.model, req.messages);
+    let prompt = data.build_prompt(&req);
     log::info!("prompt: {}", prompt);
 
     if stream {
@@ -199,49 +165,5 @@ pub async fn chat_completions(Json(req): Json<ChatCompletionRequest>, data: Data
             .body(body)
     } else {
         todo!()
-    }
-}
-
-fn build_prompt(model: &str, messages: Vec<Message>) -> String {
-    match model {
-        "phi3" => {
-            let mut prompt = String::new();
-            for message in messages {
-                match message.role.as_str() {
-                    "system" => {
-                        prompt.push_str(&format!("<|system|>\n{}<|end|>", message.content[0].text));
-                    }
-                    "user" => {
-                        prompt.push_str(&format!("<|user|>\n{}<|end|>", message.content[0].text));
-                    }
-                    "assistant" => {
-                        prompt.push_str(&format!("<|assistant|>\n{}<|end|>", message.content[0].text));
-                    }
-                    _ => panic!("unsupported role: {}", message.role),
-                }
-            }
-            prompt.push_str("<|assistant|>\n");
-            prompt
-        }
-        "llama3" => {
-            let mut prompt = String::from("<|begin_of_text|>");
-            for message in messages {
-                match message.role.as_str() {
-                    "system" => {
-                        prompt.push_str(&format!("<|start_header_id|>system<|end_header_id|>\n{}<|eot_id|>", message.content[0].text));
-                    }
-                    "user" => {
-                        prompt.push_str(&format!("<|start_header_id|>user<|end_header_id|>\n{}<|eot_id|>", message.content[0].text));
-                    }
-                    "assistant" => {
-                        prompt.push_str(&format!("<|start_header_id|>assistant<|end_header_id|>\n{}<|eot_id|>", message.content[0].text));
-                    }
-                    _ => panic!("unsupported role: {}", message.role),
-                }
-            }
-            prompt.push_str("<|start_header_id|>assistant<|end_header_id|>");
-            prompt
-        }
-        _ => panic!("unsupported model: {}", model),
     }
 }

@@ -13,6 +13,7 @@ use tokenizers::Tokenizer;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
+    http_api::ChatCompletionRequest,
     logits_processor::{LogitsProcessor, Sampling},
     token_output_stream::TokenOutputStream,
     utils, ChatCfg, ChatModel, ModelLayersWorker, ModelPostprocessor, ModelPreprocessor, Session,
@@ -69,6 +70,26 @@ impl<W: ModelLayersWorker<(Tensor, u32)>> Phi3Model<W> {
 
 #[async_trait::async_trait]
 impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for Phi3Model<W> {
+    fn build_prompt(&self, request: &ChatCompletionRequest) -> String {
+        let mut prompt = String::new();
+        for message in &request.messages {
+            match message.role.as_str() {
+                "system" => {
+                    prompt.push_str(&format!("<|system|>\n{}<|end|>", message.content[0].text));
+                }
+                "user" => {
+                    prompt.push_str(&format!("<|user|>\n{}<|end|>", message.content[0].text));
+                }
+                "assistant" => {
+                    prompt.push_str(&format!("<|assistant|>\n{}<|end|>", message.content[0].text));
+                }
+                _ => panic!("unsupported role: {}", message.role),
+            }
+        }
+        prompt.push_str("<|assistant|>\n");
+        prompt
+    }
+
     async fn chat(&self, session: Session, cfg: ChatCfg, prompt: &str, tx: Sender<String>) -> Result<()> {
         log::info!("chatting with Phi3 model");
         log::info!("prompt: {prompt}");
