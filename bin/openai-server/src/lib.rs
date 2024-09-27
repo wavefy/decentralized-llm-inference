@@ -55,10 +55,40 @@ pub async fn start_server(
             let model_exe = phi3::Phi3Model::new(device.clone(), virtual_model_layers).await;
             run(&mut worker, Arc::new(model_exe), http_bind, query_rx).await;
         }
-        "llama" => {
-            let layers_worker = llama::new_layers(DType::F16, device.clone(), false, layers.clone()).await;
+        "llama32-1b" => {
+            let resource = llama::ModelResource {
+                repo: "unsloth/Llama-3.2-1B-Instruct".to_string(),
+                model: "model.safetensors".to_string(),
+                config: "config.json".to_string(),
+                tokenizer: "tokenizer.json".to_string(),
+            };
+            let layers_worker = llama::new_layers(&resource, DType::F16, device.clone(), false, layers.clone()).await;
             let (mut worker, virtual_model_layers) = WorkerRunner::<16>::new(registry_server, model, node_id, layers.clone(), layers_worker, device.clone(), stun_servers, usage_service).await;
-            let model_exe = llama::LlamaModel::new(device.clone(), DType::F16, virtual_model_layers, false).await;
+            let model_exe = llama::LlamaModel::new(&resource, device.clone(), DType::F16, virtual_model_layers, false).await;
+            run(&mut worker, Arc::new(model_exe), http_bind, query_rx).await;
+        }
+        "llama32-3b" => {
+            let resource = llama::ModelResource {
+                repo: "unsloth/Llama-3.2-3B-Instruct".to_string(),
+                model: "model.safetensors".to_string(),
+                config: "config.json".to_string(),
+                tokenizer: "tokenizer.json".to_string(),
+            };
+            let layers_worker = llama::new_layers(&resource, DType::F16, device.clone(), false, layers.clone()).await;
+            let (mut worker, virtual_model_layers) = WorkerRunner::<28>::new(registry_server, model, node_id, layers.clone(), layers_worker, device.clone(), stun_servers, usage_service).await;
+            let model_exe = llama::LlamaModel::new(&resource, device.clone(), DType::F16, virtual_model_layers, false).await;
+            run(&mut worker, Arc::new(model_exe), http_bind, query_rx).await;
+        }
+        "llama32-vision-11b" => {
+            let resource = llama::ModelResource {
+                repo: "unsloth/Llama-3.2-1B-Instruct".to_string(),
+                model: "model.safetensors.index.json".to_string(),
+                config: "config.json".to_string(),
+                tokenizer: "tokenizer.json".to_string(),
+            };
+            let layers_worker = llama::new_layers(&resource, DType::F16, device.clone(), false, layers.clone()).await;
+            let (mut worker, virtual_model_layers) = WorkerRunner::<40>::new(registry_server, model, node_id, layers.clone(), layers_worker, device.clone(), stun_servers, usage_service).await;
+            let model_exe = llama::LlamaModel::new(&resource, device.clone(), DType::F16, virtual_model_layers, false).await;
             run(&mut worker, Arc::new(model_exe), http_bind, query_rx).await;
         }
         "fake" => {
@@ -90,7 +120,7 @@ async fn run<const MODEL_LAYERS: usize>(worker: &mut WorkerRunner<MODEL_LAYERS>,
         .at("/v1/models/:model_id", poem::get(get_model))
         .with(Cors::new());
 
-    let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
     tokio::spawn(async move {
         let shutdown_signal = async {

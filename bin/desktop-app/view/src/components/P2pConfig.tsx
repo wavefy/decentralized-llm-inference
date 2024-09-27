@@ -2,14 +2,22 @@ import React, { useEffect, useState } from 'react';
 import { P2pStatus, P2pStatusService } from '../service/P2pStatusService';
 
 const MODELS: any = {
+    "llama32-1b": {
+        layers: 16,
+        memory: 3,
+    },
+    "llama32-3b": {
+        layers: 28,
+        memory: 8,
+    },
+    "llama32-vision-11b": {
+        layers: 40,
+        memory: 25,
+    },
     "phi3": {
         layers: 32,
         memory: 4,
     },
-    "gpt2": {
-        layers: 24,
-        memory: 3,
-    }
 };
 
 const MAX_MEMORY_OPTIONS = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 24, 32, 48, 64];

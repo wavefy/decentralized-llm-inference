@@ -1,9 +1,11 @@
 use candle_core::utils::{cuda_is_available, metal_is_available};
 use candle_core::{Device, Result};
+use http_api::ChatCompletionRequest;
 use protocol::Session;
 use tokio::sync::mpsc::Sender;
 
 pub mod fake;
+pub mod http_api;
 pub mod llama;
 mod logits_processor;
 pub mod phi3;
@@ -38,6 +40,7 @@ impl Default for ChatCfg {
 
 #[async_trait::async_trait]
 pub trait ChatModel: Send + Sync + 'static {
+    fn build_prompt(&self, request: &ChatCompletionRequest) -> String;
     async fn chat(&self, session: Session, cfg: ChatCfg, prompt: &str, tx: Sender<String>) -> Result<()>;
 }
 

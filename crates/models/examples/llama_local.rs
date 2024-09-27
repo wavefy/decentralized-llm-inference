@@ -1,7 +1,7 @@
 use candle_core::{DType, Device, Result, Tensor};
 use models::{
     get_device,
-    llama::{new_layers, LlamaLayersWorker, LlamaModel},
+    llama::{new_layers, LlamaLayersWorker, LlamaModel, ModelResource},
     remote::TensorBuf,
     ChatCfg, ChatModel, ModelLayersWorker,
 };
@@ -11,8 +11,14 @@ use tokio::time::Instant;
 #[tokio::main]
 async fn main() {
     let device = get_device(false).unwrap();
-    let layers_worker = VirtualRemoteLayersWorker::new(device.clone()).await;
-    let llama = LlamaModel::new(device, DType::F16, layers_worker, false).await;
+    let resource = ModelResource {
+        repo: "unsloth/Llama-3.2-1B-Instruct".to_string(),
+        model: "model.safetensors".to_string(),
+        config: "config.json".to_string(),
+        tokenizer: "tokenizer.json".to_string(),
+    };
+    let layers_worker = VirtualRemoteLayersWorker::new(&resource, device.clone()).await;
+    let llama = LlamaModel::new(&resource, device, DType::F16, layers_worker, false).await;
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     tokio::spawn(async move {
         llama.chat(Session::new(), ChatCfg::default(), "hello", tx).await.unwrap();
@@ -37,8 +43,8 @@ struct VirtualRemoteLayersWorker {
 }
 
 impl VirtualRemoteLayersWorker {
-    async fn new(device: Device) -> Self {
-        let layers_worker = new_layers(DType::F16, device.clone(), false, 0..16).await;
+    async fn new(resource: &ModelResource, device: Device) -> Self {
+        let layers_worker = new_layers(resource, DType::F16, device.clone(), false, 0..16).await;
         Self { layers_worker, device }
     }
 }

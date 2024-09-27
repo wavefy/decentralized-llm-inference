@@ -13,11 +13,11 @@ use tauri::generate_context;
 #[command(version, about, long_about = None)]
 struct Args {
     /// status bind addr
-    #[arg(env, long, default_value = "127.0.0.1:18889")]
+    #[arg(env, long, default_value = "127.0.0.1:28888")]
     control_bind: SocketAddr,
 
     /// http bind addr
-    #[arg(env, long, default_value = "127.0.0.1:1234")]
+    #[arg(env, long, default_value = "127.0.0.1:18888")]
     http_bind: SocketAddr,
 
     /// stun server

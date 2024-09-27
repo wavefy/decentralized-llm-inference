@@ -81,9 +81,57 @@ async fn main() {
             )
             .await;
         }
-        "llama" => {
-            let layers_worker = llama::new_layers(DType::F16, device.clone(), false, args.layers_from..args.layers_to).await;
+        "llama32-1b" => {
+            let resource = llama::ModelResource {
+                repo: "unsloth/Llama-3.2-1B-Instruct".to_string(),
+                model: "model.safetensors".to_string(),
+                config: "config.json".to_string(),
+                tokenizer: "tokenizer.json".to_string(),
+            };
+            let layers_worker = llama::new_layers(&resource, DType::F16, device.clone(), false, args.layers_from..args.layers_to).await;
             run::<_, 16>(
+                &args.registry_server,
+                device,
+                layers_worker,
+                &args.model,
+                &args.node_id,
+                args.layers_from,
+                args.layers_to,
+                &args.stun_server,
+                usage_service,
+            )
+            .await;
+        }
+        "llama32-3b" => {
+            let resource = llama::ModelResource {
+                repo: "unsloth/Llama-3.2-3B-Instruct".to_string(),
+                model: "model.safetensors".to_string(),
+                config: "config.json".to_string(),
+                tokenizer: "tokenizer.json".to_string(),
+            };
+            let layers_worker = llama::new_layers(&resource, DType::F16, device.clone(), false, args.layers_from..args.layers_to).await;
+            run::<_, 28>(
+                &args.registry_server,
+                device,
+                layers_worker,
+                &args.model,
+                &args.node_id,
+                args.layers_from,
+                args.layers_to,
+                &args.stun_server,
+                usage_service,
+            )
+            .await;
+        }
+        "llama32-vision-11b" => {
+            let resource = llama::ModelResource {
+                repo: "unsloth/Llama-3.2-1B-Instruct".to_string(),
+                model: "model.safetensors.index.json".to_string(),
+                config: "config.json".to_string(),
+                tokenizer: "tokenizer.json".to_string(),
+            };
+            let layers_worker = llama::new_layers(&resource, DType::F16, device.clone(), false, args.layers_from..args.layers_to).await;
+            run::<_, 40>(
                 &args.registry_server,
                 device,
                 layers_worker,

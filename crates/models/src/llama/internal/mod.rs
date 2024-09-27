@@ -43,6 +43,7 @@ pub struct LlamaConfig {
     pub eos_token_id: Option<LlamaEosToks>,
     pub rope_scaling: Option<Llama3RopeConfig>,
     pub max_position_embeddings: usize,
+    pub tie_word_embeddings: Option<bool>,
 }
 
 impl LlamaConfig {
@@ -71,6 +72,7 @@ impl LlamaConfig {
             eos_token_id: self.eos_token_id,
             rope_scaling: self.rope_scaling,
             max_position_embeddings: self.max_position_embeddings,
+            tie_word_embeddings: self.tie_word_embeddings.unwrap_or(false),
         }
     }
 }
@@ -90,6 +92,7 @@ pub struct Config {
     pub eos_token_id: Option<LlamaEosToks>,
     pub rope_scaling: Option<Llama3RopeConfig>,
     pub max_position_embeddings: usize,
+    pub tie_word_embeddings: bool,
 }
 
 impl Config {
@@ -108,6 +111,7 @@ impl Config {
             eos_token_id: None,
             rope_scaling: None,
             max_position_embeddings: DEFAULT_MAX_SEQ_LEN,
+            tie_word_embeddings: false,
         }
     }
 
@@ -126,6 +130,7 @@ impl Config {
             eos_token_id: None,
             rope_scaling: None,
             max_position_embeddings: DEFAULT_MAX_SEQ_LEN,
+            tie_word_embeddings: false,
         }
     }
 }
@@ -455,7 +460,12 @@ impl LlamaPost {
     }
 
     pub fn load(vb: &VarBuilder, cfg: &Config) -> Result<Self> {
-        let lm_head = linear(cfg.hidden_size, cfg.vocab_size, vb.pp("lm_head"))?;
+        let lm_head = if cfg.tie_word_embeddings {
+            let wte = embedding(cfg.vocab_size, cfg.hidden_size, vb.pp("model.embed_tokens"))?;
+            Linear::new(wte.embeddings().clone(), None)
+        } else {
+            linear(cfg.hidden_size, cfg.vocab_size, vb.pp("lm_head"))?
+        };
         let ln_f = candle_nn::rms_norm(cfg.hidden_size, cfg.rms_norm_eps, vb.pp("model.norm"))?;
         Ok(Self { ln_f, lm_head })
     }

@@ -17,28 +17,40 @@ const EOS_TOKEN: &str = "</s>";
 const USE_KV_CACHE: bool = true;
 
 use crate::{
+    http_api::ChatCompletionRequest,
     logits_processor::{LogitsProcessor, Sampling},
     token_output_stream::TokenOutputStream,
     utils::{apply_repeat_penalty, hub_load_safetensors},
     ChatCfg, ChatModel, ModelLayersWorker,
 };
 
-async fn tokenizer_path() -> PathBuf {
+async fn tokenizer_path(repo: &str, filename: &str) -> PathBuf {
     let api = Api::new().unwrap();
-    let repo = api.repo(Repo::with_revision("nvidia/Llama-3.1-Minitron-4B-Depth-Base".to_string(), RepoType::Model, "main".to_string()));
-    repo.get("tokenizer.json").await.unwrap()
+    let repo = api.repo(Repo::with_revision(repo.to_string(), RepoType::Model, "main".to_string()));
+    repo.get(filename).await.unwrap()
 }
 
-async fn config_path() -> PathBuf {
+async fn config_path(repo: &str, filename: &str) -> PathBuf {
     let api = Api::new().unwrap();
-    let repo = api.repo(Repo::with_revision("nvidia/Llama-3.1-Minitron-4B-Depth-Base".to_string(), RepoType::Model, "main".to_string()));
-    repo.get("config.json").await.unwrap()
+    let repo = api.repo(Repo::with_revision(repo.to_string(), RepoType::Model, "main".to_string()));
+    repo.get(filename).await.unwrap()
 }
 
-pub async fn model_filenames() -> Vec<PathBuf> {
+pub async fn model_filenames(repo: &str, filename: &str) -> Vec<PathBuf> {
     let api = Api::new().unwrap();
-    let repo = api.repo(Repo::with_revision("nvidia/Llama-3.1-Minitron-4B-Depth-Base".to_string(), RepoType::Model, "main".to_string()));
-    hub_load_safetensors(&repo, "model.safetensors.index.json").await.unwrap()
+    let repo = api.repo(Repo::with_revision(repo.to_string(), RepoType::Model, "main".to_string()));
+    if filename.ends_with(".js") {
+        hub_load_safetensors(&repo, filename).await.unwrap()
+    } else {
+        vec![repo.get(filename).await.unwrap()]
+    }
+}
+
+pub struct ModelResource {
+    pub repo: String,
+    pub tokenizer: String,
+    pub config: String,
+    pub model: String,
 }
 
 pub struct LlamaModel<W: ModelLayersWorker<(Tensor, u32)>> {
@@ -51,15 +63,15 @@ pub struct LlamaModel<W: ModelLayersWorker<(Tensor, u32)>> {
 }
 
 impl<W: ModelLayersWorker<(Tensor, u32)>> LlamaModel<W> {
-    pub async fn new(device: Device, dtype: DType, layers_worker: W, use_flash_attn: bool) -> Self {
-        let tokenizer_filename = tokenizer_path().await;
+    pub async fn new(resource: &ModelResource, device: Device, dtype: DType, layers_worker: W, use_flash_attn: bool) -> Self {
+        let tokenizer_filename = tokenizer_path(&resource.repo, &resource.tokenizer).await;
         let tokenizer = Tokenizer::from_file(tokenizer_filename).unwrap();
 
-        let config_filename = config_path().await;
+        let config_filename = config_path(&resource.repo, &resource.config).await;
         let config: LlamaConfig = serde_json::from_slice(&std::fs::read(config_filename).unwrap()).unwrap();
         let config = config.into_config(use_flash_attn);
 
-        let filenames = model_filenames().await;
+        let filenames = model_filenames(&resource.repo, &resource.model).await;
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, dtype, &device).unwrap() };
 
         let pre = LlamaPre::load(&vb, &config).unwrap();
@@ -78,6 +90,34 @@ impl<W: ModelLayersWorker<(Tensor, u32)>> LlamaModel<W> {
 
 #[async_trait::async_trait]
 impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for LlamaModel<W> {
+    fn build_prompt(&self, request: &ChatCompletionRequest) -> String {
+        // let mut prompt = String::from("<|begin_of_text|>");
+        // for message in &request.messages {
+        //     match message.role.as_str() {
+        //         "system" => {
+        //             prompt.push_str(&format!("<|start_header_id|>system<|end_header_id|>\n{}<|eot_id|>", message.content[0].text));
+        //         }
+        //         "user" => {
+        //             prompt.push_str(&format!("<|start_header_id|>user<|end_header_id|>\n{}<|eot_id|>", message.content[0].text));
+        //         }
+        //         "assistant" => {
+        //             prompt.push_str(&format!("<|start_header_id|>assistant<|end_header_id|>\n{}<|eot_id|>", message.content[0].text));
+        //         }
+        //         _ => panic!("unsupported role: {}", message.role),
+        //     }
+        // }
+        // prompt.push_str("<|start_header_id|>assistant<|end_header_id|>");
+        // prompt
+
+        // TODO: currently too big prompt cause RPC error, temporary solution is to use only the last user message
+        for message in request.messages.iter().rev() {
+            if message.role == "user" {
+                return message.content[0].text.clone();
+            }
+        }
+        "".to_string()
+    }
+
     async fn chat(&self, session: Session, cfg: ChatCfg, prompt: &str, tx: Sender<String>) -> Result<()> {
         let eos_token_id = self.config.eos_token_id.clone().or_else(|| self.tokenizer.token_to_id(EOS_TOKEN).map(LlamaEosToks::Single));
         let mut tokens = self.tokenizer.encode(prompt, true).unwrap().get_ids().to_vec();
@@ -162,12 +202,12 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
     }
 }
 
-pub async fn new_layers(dtype: DType, device: Device, use_flash_attn: bool, range: Range<u32>) -> LlamaLayersWorker {
-    let config_filename = config_path().await;
+pub async fn new_layers(resource: &ModelResource, dtype: DType, device: Device, use_flash_attn: bool, range: Range<u32>) -> LlamaLayersWorker {
+    let config_filename = config_path(&resource.repo, &resource.config).await;
     let config: LlamaConfig = serde_json::from_slice(&std::fs::read(config_filename).unwrap()).unwrap();
     let config = config.into_config(use_flash_attn);
 
-    let filenames = model_filenames().await;
+    let filenames = model_filenames(&resource.repo, &resource.model).await;
     let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, dtype, &device).unwrap() };
     LlamaLayersWorker::new(range, vb, config, dtype, device).unwrap()
 }

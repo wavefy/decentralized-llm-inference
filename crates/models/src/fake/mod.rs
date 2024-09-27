@@ -7,7 +7,7 @@ use candle_core::{Device, Result, Shape, Tensor};
 use protocol::Session;
 use tokio::sync::mpsc::Sender;
 
-use crate::{ChatCfg, ChatModel, ModelLayersWorker};
+use crate::{http_api::ChatCompletionRequest, ChatCfg, ChatModel, ModelLayersWorker};
 
 pub struct FakeModel<W: ModelLayersWorker<(Tensor, u32)>> {
     device: Device,
@@ -22,6 +22,10 @@ impl<W: ModelLayersWorker<(Tensor, u32)>> FakeModel<W> {
 
 #[async_trait::async_trait]
 impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for FakeModel<W> {
+    fn build_prompt(&self, _request: &ChatCompletionRequest) -> String {
+        todo!()
+    }
+
     async fn chat(&self, session: Session, cfg: ChatCfg, _prompt: &str, tx: Sender<String>) -> Result<()> {
         self.layers_worker.start(session).await;
         let start_gen = Instant::now();
