@@ -124,7 +124,7 @@ pub async fn p2p_start(body: Json<P2pStart>, data: Data<&P2pState>) -> Response 
     let range = body.from_layer..body.to_layer;
     let (query_tx, query_rx) = channel(10);
     let account = LocalAccount::from_private_key(&body.private_key, 0).expect("Invalid private key");
-    let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet);
+    let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, range.clone());
     onchain_service.init().await;
 
     let usage_service = Arc::new(onchain_service);

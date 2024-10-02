@@ -12,7 +12,8 @@ aptos-sdk = { git = "https://github.com/aptos-labs/aptos-core", branch = "devnet
 url = { version = "2.4.0", features = ["serde"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_bytes = { version = "0.11.5" }
+bincode = { workspace = true }
 usage-service = { path = "../usage-service", version = "0.1.0" }
 protocol = { path = "../protocol", version = "0.1.0" }
 utils = { path = "../utils", version = "0.1.0" }
+ed25519-dalek = { version = "2.1.1", features = ["serde"] }

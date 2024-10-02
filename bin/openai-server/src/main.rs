@@ -4,8 +4,9 @@ use contract::{
     OnChainService,
 };
 use openai_server::{start_control_server, start_server};
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, ops::Range, sync::Arc};
 use tokio::sync::mpsc::channel;
+use tracing_subscriber::layer;
 use utils::random_node_id;
 
 /// OpenAI Server for decentralized LLM
@@ -65,7 +66,7 @@ async fn main() {
         let layers_from = args.layers_from.unwrap_or(0);
         let layers_to = args.layers_to.unwrap_or(0);
         let account = LocalAccount::from_private_key(&args.private_key.unwrap(), 0).expect("Invalid private key");
-        let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet);
+        let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, layers_from..layers_to);
         onchain_service.init().await;
 
         let usage_service = Arc::new(onchain_service);
