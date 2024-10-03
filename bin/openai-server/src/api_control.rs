@@ -51,6 +51,7 @@ struct P2pStatusRes {
     balance: Option<u64>,
     peers: Option<u32>,
     sessions: Option<u32>,
+    topup_balance: Option<u64>,
     status: String,
 }
 
@@ -61,6 +62,7 @@ pub async fn p2p_status(data: Data<&P2pState>) -> Response {
         let (tx, rx) = oneshot::channel();
         model.query_tx.send(WorkerControl::Status(tx)).await.unwrap();
         let status = rx.await.unwrap();
+        let topup_balance = model.wallet.topup_balance().await;
         let balance = model.wallet.topup_balance().await;
         let earning = model.wallet.earning_token_count();
         let spending = model.wallet.spending_token_count();
@@ -80,6 +82,7 @@ pub async fn p2p_status(data: Data<&P2pState>) -> Response {
             spending: Some(spending),
             earning: Some(earning),
             balance: balance,
+            topup_balance,
             peers: Some(status.peers.len() as u32),
             sessions: Some(status.sessions.len() as u32),
         }
@@ -92,6 +95,7 @@ pub async fn p2p_status(data: Data<&P2pState>) -> Response {
             balance: None,
             peers: None,
             sessions: None,
+            topup_balance: None,
         }
     };
 
