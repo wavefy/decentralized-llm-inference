@@ -112,7 +112,7 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
         };
         let tokens = tokens.get_ids();
 
-        if let Err(e) = self.layers_worker.start(session).await {
+        if let Err(e) = self.layers_worker.start(session, cfg.clone()).await {
             log::error!("failed to start layers worker: {e}");
             return Err(e);
         }
@@ -138,7 +138,7 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
         }
         let eos_token = *tos.tokenizer().get_vocab(true).get("<|endoftext|>").unwrap();
 
-        for index in 0..cfg.max_len {
+        for index in 0..(cfg.max_len - tokens.len() as u32) {
             let input = Tensor::new(&[next_token], &self.device)?.unsqueeze(0)?;
             let step1 = self.preprocessor.forward(session, input).await?;
             let step2 = self.layers_worker.forward(session, index as u32 + 1, step1, tokens.len() as u32 + index).await?;

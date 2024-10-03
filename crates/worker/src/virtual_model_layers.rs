@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use candle_core::{Device, Result, Tensor};
-use models::{remote::TensorBuf, ModelLayersWorker};
+use models::{remote::TensorBuf, ChatCfg, ModelLayersWorker};
 use protocol::{
     llm::{EndReq, ForwardReq, StartReq},
     Session,
@@ -16,7 +16,7 @@ pub struct VirtualModelLayers<LW, const MODEL_LAYERS: usize> {
 
 #[async_trait::async_trait]
 impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_LAYERS: usize> ModelLayersWorker<(Tensor, u32)> for VirtualModelLayers<LW, MODEL_LAYERS> {
-    async fn start(&self, session: Session) -> Result<()> {
+    async fn start(&self, session: Session, config: ChatCfg) -> Result<()> {
         let res = self
             .model_service
             .start(StartReq {
@@ -25,6 +25,8 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
                 from_layer: 0,
                 metadata: vec![],
                 chain_index: 0,
+                max_tokens: config.max_len,
+
             })
             .await;
         if res.success {

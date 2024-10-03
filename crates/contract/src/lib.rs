@@ -54,9 +54,6 @@ impl OnChainService {
     pub async fn init(&self) {
         self.client.update_sequence_number().await.expect("Failed to update sequence number");
         log::info!("[OnChainWorker] onchain initialized");
-        // let current_balance = self.client.get_current_balance().await.expect("Failed to get current balance");
-
-        // log::info!("[OnChainWorker] current balance: {current_balance}");
     }
 
     pub async fn create_session(&self, chat_id: u64, max_token: u64, participants: Vec<Address>, layers: Vec<u64>) -> Result<Response<Transaction>, RestError> {
@@ -66,6 +63,10 @@ impl OnChainService {
     pub fn commit_session(&self, chat_id: u64) {
         let token_count = self.spending.finish(chat_id);
         log::info!("[OnChainService] commit token: {token_count}");
+    }
+
+    pub async fn topup_balance(&self) -> Option<u64> {
+        self.client.get_topup_balance().await.ok()
     }
 
     pub async fn current_balance(&self) -> Option<u64> {
@@ -99,17 +100,20 @@ impl WorkerUsageService for OnChainService {
             })
         } else {
             log::info!("[OnChainService] pre_start from worker: {req:?}");
+            let pre_metadata = bincode::deserialize::<OnChainServiceMetadata>(&req.metadata).expect("Should be able to parse metadata");
+            self.validator.add_root_pk(req.chat_id, pre_metadata.root_pk);
             Ok(req)
         }
     }
 
     async fn post_start(&self, req: StartReq, res: StartRes) -> StartRes {
-        let pre_metadata = bincode::deserialize::<OnChainServiceMetadata>(&req.metadata).expect("Should be able to parse metadata");
+        let pre_metadata = bincode::deserialize::<OnChainServiceMetadata>(&res.metadata).expect("Should be able to parse metadata");
         log::info!("[OnChainService] pre_metadata: {pre_metadata:?}");
         if req.chain_index == 0 {
             let addresses = pre_metadata.addresses;
             let layers = pre_metadata.layers;
-            let onchain_res = self.create_session(req.chat_id, 100, addresses, layers).await;
+            let max_tokens = req.max_tokens;
+            let onchain_res = self.create_session(req.chat_id, max_tokens as u64, addresses, layers).await;
             match onchain_res {
                 Ok(_) => {
                     log::info!("[OnChainService] Successfully created session");
@@ -166,7 +170,7 @@ impl WorkerUsageService for OnChainService {
     async fn post_end(&self, chat_id: u64, req: EndReq, res: EndRes) -> EndRes {
         if req.chain_index != 0 {
             // this is earning
-            let metadata = bincode::deserialize::<OnChainServiceMetadata>(&req.metadata).expect("Should be able to parse metadata");
+            let metadata = bincode::deserialize::<OnChainServiceMetadata>(&res.metadata).expect("Should be able to parse metadata");
             let client = self.client.clone();
             let token_count = self.earning.finish(chat_id);
 
@@ -195,6 +199,7 @@ impl WorkerUsageService for OnChainService {
             self.spending.increase(chat_id, 1);
             let count = self.spending.get(chat_id);
             let checkpoint = self.validator.create_checkpoint(chat_id, count);
+            log::info!("checkpoint: {:?}", checkpoint);
 
             let metadata = OnChainServiceMetadata {
                 addresses: vec![],

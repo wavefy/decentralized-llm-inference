@@ -61,7 +61,7 @@ pub async fn p2p_status(data: Data<&P2pState>) -> Response {
         let (tx, rx) = oneshot::channel();
         model.query_tx.send(WorkerControl::Status(tx)).await.unwrap();
         let status = rx.await.unwrap();
-        let balance = model.wallet.current_balance().await;
+        let balance = model.wallet.topup_balance().await;
         let earning = model.wallet.earning_token_count();
         let spending = model.wallet.spending_token_count();
 

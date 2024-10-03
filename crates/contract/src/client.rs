@@ -1,22 +1,19 @@
 use anyhow::{Context, Result};
 use aptos_sdk::{
-    move_types::{
+    coin_client::CoinClient, move_types::{
         ident_str,
         identifier::Identifier,
         language_storage::ModuleId,
         value::{serialize_values, MoveValue},
-    },
-    rest_client::{
+    }, rest_client::{
         aptos_api_types::{Address, ViewFunction},
         error::RestError,
         AptosBaseUrl, Client, ClientBuilder, Response, Transaction,
-    },
-    transaction_builder::TransactionBuilder,
-    types::{
+    }, transaction_builder::TransactionBuilder, types::{
         chain_id::ChainId,
         transaction::{EntryFunction, TransactionPayload},
         LocalAccount,
-    },
+    }
 };
 use std::{
     str::FromStr,
@@ -42,6 +39,12 @@ impl OnChainClient {
     }
 
     pub async fn get_current_balance(&self) -> Result<u64> {
+        let client = self.client.clone();
+        let coin_client = CoinClient::new(&client);
+        coin_client.get_account_balance(&self.account.address()).await
+    }
+
+    pub async fn get_topup_balance(&self) -> Result<u64> {
         let view_func = ViewFunction {
             module: ModuleId::new(self.contract_address.clone().into(), ident_str!("dllm").into()),
             function: ident_str!("get_balance").into(),

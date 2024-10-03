@@ -26,6 +26,10 @@ impl OnChainValidator {
         }
     }
 
+    pub fn add_root_pk(&self, chat_id: u64, pk: ed25519::Ed25519PublicKey) {
+        self.root_pks.insert(chat_id, pk);
+    }
+
     pub fn update_checkpoint(&self, chat_id: u64, checkpoint: Checkpoint) -> Result<()> {
         if self.verify_checkpoint(chat_id, &checkpoint) {
             self.checkpoints.insert(chat_id, checkpoint);
@@ -40,7 +44,7 @@ impl OnChainValidator {
     }
 
     pub fn create_checkpoint(&self, chat_id: u64, token_count: u64) -> Checkpoint {
-        log::info!("[OnChainValidator] create checkpoint: {token_count}");
+        log::info!("[OnChainValidator] create checkpoint: {token_count} for {chat_id}");
         let signature = self.sign_checkpoint(token_count);
         self.checkpoints.insert(chat_id, Checkpoint { token_count, signature });
         self.checkpoints.get_clone(&chat_id).unwrap()
@@ -53,6 +57,7 @@ impl OnChainValidator {
     }
 
     pub fn verify_checkpoint(&self, chat_id: u64, checkpoint: &Checkpoint) -> bool {
+        log::info!("[OnChainValidator] verify checkpoint: {checkpoint:?} for {chat_id}");
         if let Some(pk_raw) = self.root_pks.get_clone(&chat_id).map(|pk| pk.to_bytes()) {
             log::info!("[OnChainValidator] verify checkpoint: {checkpoint:?}");
             let pk = VerifyingKey::from_bytes(&pk_raw).expect("Failed to parse public key");
