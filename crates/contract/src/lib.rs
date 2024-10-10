@@ -13,7 +13,7 @@ use std::{ops::Range, sync::Arc};
 use usage_service::WorkerUsageService;
 use validator::Checkpoint;
 
-pub const CONTRACT_ADDRESS: &str = "0x696fd585308e07d82aefc45df064eb75342256b1ed5305b3955213b4b0fdf3b4";
+pub const CONTRACT_ADDRESS: &str = "0xf24a5c56cbaac7756413042d3456bef5e9aa6235defa675df962b7e541f1d20b";
 
 pub enum OnChainEvent {
     LayerWorkerClaimToken(u64, Address),
@@ -49,6 +49,10 @@ impl OnChainService {
             layers,
             validator,
         }
+    }
+
+    pub fn address(&self) -> Address {
+        self.client.account.address().into()
     }
 
     pub async fn init(&self) {

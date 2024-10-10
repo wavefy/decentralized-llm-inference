@@ -17,7 +17,7 @@ const EOS_TOKEN: &str = "</s>";
 const USE_KV_CACHE: bool = true;
 
 use crate::{
-    http_api::ChatCompletionRequest,
+    http_api::{ChatCompletionRequest, StringOrVecContent},
     logits_processor::{LogitsProcessor, Sampling},
     token_output_stream::TokenOutputStream,
     utils::{apply_repeat_penalty, hub_load_safetensors},
@@ -112,7 +112,10 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
         // TODO: currently too big prompt cause RPC error, temporary solution is to use only the last user message
         for message in request.messages.iter().rev() {
             if message.role == "user" {
-                return message.content[0].text.clone();
+                match &message.content {
+                    StringOrVecContent::String(text) => return text.clone(),
+                    StringOrVecContent::Vec(messages) => return messages[0].text.clone(),
+                }
             }
         }
         "".to_string()

@@ -141,15 +141,19 @@ pub async fn chat_completions(Json(req): Json<ChatCompletionRequest>, data: Data
             let (tx, mut rx) = channel(1);
             tokio::spawn(async move { model_exe.chat(session, cfg, &prompt, tx).await });
             while let Some(out) = rx.recv().await {
-                let response = json!({
-                    "choices": [
-                        {
-                            "delta": {"content": out},
-                            "index": 0
-                        }
-                    ]
-                });
-                if let Err(e) = stream_tx.send(response.to_string()).await {
+                let response = match req.plain_text {
+                    Some(false) | None => json!({
+                        "choices": [
+                            {
+                                "delta": {"content": out},
+                                "index": 0
+                            }
+                        ]
+                    })
+                    .to_string(),
+                    Some(true) => out,
+                };
+                if let Err(e) = stream_tx.send(response).await {
                     log::error!("error sending message: {}", e);
                     break;
                 }

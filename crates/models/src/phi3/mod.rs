@@ -13,7 +13,7 @@ use tokenizers::Tokenizer;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
-    http_api::ChatCompletionRequest,
+    http_api::{ChatCompletionRequest, StringOrVecContent},
     logits_processor::{LogitsProcessor, Sampling},
     token_output_stream::TokenOutputStream,
     utils, ChatCfg, ChatModel, ModelLayersWorker, ModelPostprocessor, ModelPreprocessor, Session,
@@ -73,15 +73,19 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
     fn build_prompt(&self, request: &ChatCompletionRequest) -> String {
         let mut prompt = String::new();
         for message in &request.messages {
+            let text = match message.content {
+                StringOrVecContent::String(ref s) => s,
+                StringOrVecContent::Vec(ref v) => &v[0].text,
+            };
             match message.role.as_str() {
                 "system" => {
-                    prompt.push_str(&format!("<|system|>\n{}<|end|>", message.content[0].text));
+                    prompt.push_str(&format!("<|system|>\n{}<|end|>", text));
                 }
                 "user" => {
-                    prompt.push_str(&format!("<|user|>\n{}<|end|>", message.content[0].text));
+                    prompt.push_str(&format!("<|user|>\n{}<|end|>", text));
                 }
                 "assistant" => {
-                    prompt.push_str(&format!("<|assistant|>\n{}<|end|>", message.content[0].text));
+                    prompt.push_str(&format!("<|assistant|>\n{}<|end|>", text));
                 }
                 _ => panic!("unsupported role: {}", message.role),
             }
