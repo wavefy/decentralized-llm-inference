@@ -2,7 +2,7 @@ use std::{ops::Range, sync::Arc};
 
 use candle_core::{Device, Tensor};
 use model_router::RouteTable;
-use models::{remote::TensorBuf, ModelLayersWorker};
+use models::{remote::TensorBuf, ChatCfg, ModelLayersWorker};
 use p2p_network::addr::NodeId;
 use prost::Message;
 use protocol::{
@@ -119,7 +119,8 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
 
             if let Some(layers) = route.local {
                 log::info!("[ModelService] start session {} with local layers {layers:?}", req.session);
-                self.layers.start(Session(req.session)).await;
+                // TODO: Handle Chat Config properly
+                self.layers.start(Session(req.session), ChatCfg::default()).await;
             }
 
             let res = if let Some((dest, layers, _, _)) = &route.remote {
@@ -139,6 +140,7 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
                             from_layer: layers.start,
                             metadata: req.metadata.clone(),
                             chain_index: req.chain_index + 1,
+                            max_tokens: req.max_tokens,
                         },
                     )
                     .await

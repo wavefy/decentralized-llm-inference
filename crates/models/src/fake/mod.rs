@@ -27,7 +27,7 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
     }
 
     async fn chat(&self, session: Session, cfg: ChatCfg, _prompt: &str, tx: Sender<String>) -> Result<()> {
-        self.layers_worker.start(session).await;
+        self.layers_worker.start(session, cfg.clone()).await;
         let start_gen = Instant::now();
         for index in 0..cfg.max_len {
             let tensor = Tensor::from_vec(vec![index], Shape::from_dims(&[1]), &self.device).unwrap();
@@ -53,7 +53,7 @@ impl FakeLayersWorker {
 
 #[async_trait::async_trait]
 impl ModelLayersWorker<(Tensor, u32)> for FakeLayersWorker {
-    async fn start(&self, session: Session) -> Result<()> {
+    async fn start(&self, session: Session, _cfg: ChatCfg) -> Result<()> {
         Ok(())
     }
 

@@ -51,7 +51,9 @@ struct P2pStatusRes {
     balance: Option<u64>,
     peers: Option<u32>,
     sessions: Option<u32>,
+    topup_balance: Option<u64>,
     status: String,
+    address: Option<String>,
 }
 
 #[handler]
@@ -61,9 +63,11 @@ pub async fn p2p_status(data: Data<&P2pState>) -> Response {
         let (tx, rx) = oneshot::channel();
         model.query_tx.send(WorkerControl::Status(tx)).await.unwrap();
         let status = rx.await.unwrap();
+        let topup_balance = model.wallet.topup_balance().await;
         let balance = model.wallet.current_balance().await;
         let earning = model.wallet.earning_token_count();
         let spending = model.wallet.spending_token_count();
+        let address = model.wallet.address().to_string();
 
         P2pStatusRes {
             status: if status.ready {
@@ -80,8 +84,10 @@ pub async fn p2p_status(data: Data<&P2pState>) -> Response {
             spending: Some(spending),
             earning: Some(earning),
             balance: balance,
+            topup_balance,
             peers: Some(status.peers.len() as u32),
             sessions: Some(status.sessions.len() as u32),
+            address: Some(address),
         }
     } else {
         P2pStatusRes {
@@ -92,6 +98,8 @@ pub async fn p2p_status(data: Data<&P2pState>) -> Response {
             balance: None,
             peers: None,
             sessions: None,
+            topup_balance: None,
+            address: None,
         }
     };
 
@@ -124,7 +132,7 @@ pub async fn p2p_start(body: Json<P2pStart>, data: Data<&P2pState>) -> Response 
     let range = body.from_layer..body.to_layer;
     let (query_tx, query_rx) = channel(10);
     let account = LocalAccount::from_private_key(&body.private_key, 0).expect("Invalid private key");
-    let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet);
+    let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, range.clone());
     onchain_service.init().await;
 
     let usage_service = Arc::new(onchain_service);

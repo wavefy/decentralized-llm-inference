@@ -1,6 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum StringOrVecContent {
+    String(String),
+    Vec(Vec<MessageContent>),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct MessageContent {
     #[serde(rename = "type")]
     pub _type: String,
@@ -10,7 +17,7 @@ pub struct MessageContent {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Message {
     pub role: String,
-    pub content: Vec<MessageContent>,
+    pub content: StringOrVecContent,
 }
 
 #[derive(Debug, Deserialize)]
@@ -20,6 +27,7 @@ pub struct ChatCompletionRequest {
     pub temperature: Option<f32>,
     pub max_tokens: Option<i32>,
     pub stream: Option<bool>,
+    pub plain_text: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]

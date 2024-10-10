@@ -61,7 +61,7 @@ async fn main() {
     let device = get_device(false).unwrap();
 
     let account = LocalAccount::from_private_key(&args.private_key, 0).expect("Invalid private key");
-    let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet);
+    let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, args.layers_from..args.layers_to);
     onchain_service.init().await;
     let usage_service = Arc::new(onchain_service);
 

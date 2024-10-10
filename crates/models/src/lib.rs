@@ -14,6 +14,7 @@ pub mod remote;
 mod token_output_stream;
 mod utils;
 
+#[derive(Debug, Clone)]
 pub struct ChatCfg {
     pub seed: u64,
     pub temperature: f64,
@@ -55,7 +56,7 @@ pub trait ModelPreprocessor<IN, OUT> {
 
 #[async_trait::async_trait]
 pub trait ModelLayersWorker<E>: Send + Sync + 'static {
-    async fn start(&self, session: Session) -> Result<()>;
+    async fn start(&self, session: Session, config: ChatCfg) -> Result<()>;
     /// Async function for allowing remote execute
     /// This function calculate from input to output embedding
     async fn forward(&self, session: Session, step: u32, embedding: E, index_pos: u32) -> Result<E>;

@@ -1,1 +1,1 @@
-cargo run --release --features metal -- --node-id node2 --model phi3 --layers-from 16 --layers-to 32 --http-bind 127.0.0.1:18889
+cargo run --release --features metal -- --node-id node2 --model phi3 --layers-from 16 --layers-to 32 --http-bind 127.0.0.1:18889 --private-key 0x69d91353993001d80ef74f7a27fcb15456d4d6298c755a5316a0a0d87b6b39b9

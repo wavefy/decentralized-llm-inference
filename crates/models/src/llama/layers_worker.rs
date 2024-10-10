@@ -5,7 +5,7 @@ use candle_nn::VarBuilder;
 use spin::Mutex;
 use utils::shared_map::SharedHashMap;
 
-use crate::{ModelLayersWorker, Session};
+use crate::{ChatCfg, ModelLayersWorker, Session};
 
 use super::{
     internal::{Cache, Config, LlamaLayers},
@@ -35,7 +35,7 @@ impl LlamaLayersWorker {
 
 #[async_trait::async_trait]
 impl ModelLayersWorker<(Tensor, u32)> for LlamaLayersWorker {
-    async fn start(&self, session: Session) -> Result<()> {
+    async fn start(&self, session: Session, _cfg: ChatCfg) -> Result<()> {
         let cache = Cache::new(USE_KV_CACHE, self.dtype, &self.cfg, &self.device).unwrap();
         self.caches.insert(session, Arc::new(Mutex::new(cache)));
         Ok(())

@@ -3,7 +3,7 @@ use std::ops::Range;
 use candle_core::{quantized::gguf_file, DType, Device, Result, Tensor};
 use candle_nn::Module;
 
-use crate::{ModelLayersWorker, Session};
+use crate::{ChatCfg, ModelLayersWorker, Session};
 
 use super::internal::{layer_weights::LayerWeights, mlp::Mlp, qlinear::QLinear};
 use super::layers_cache::LayersCache;
@@ -85,7 +85,7 @@ impl Phi3LayersWorker {
 
 #[async_trait::async_trait]
 impl ModelLayersWorker<(Tensor, u32)> for Phi3LayersWorker {
-    async fn start(&self, session: Session) -> Result<()> {
+    async fn start(&self, session: Session, _cfg: ChatCfg) -> Result<()> {
         for (idx, _) in self.layers.iter().enumerate() {
             self.caches.add_cache(idx, session);
         }

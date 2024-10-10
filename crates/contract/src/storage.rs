@@ -16,6 +16,10 @@ impl OnChainStorage {
         self.sessions.insert(chat_id, count + token_count);
     }
 
+    pub fn get(&self, chat_id: u64) -> u64 {
+        self.sessions.get_clone(&chat_id).unwrap_or_default()
+    }
+
     pub fn finish(&self, chat_id: u64) -> u64 {
         self.sessions.remove(&chat_id).unwrap_or_default()
     }
