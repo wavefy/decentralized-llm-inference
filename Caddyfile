@@ -1,23 +1,23 @@
 registry.llm.waveyfy.network {
-  proxy / openai-registry:3000 {
+  reverse_proxy / :3000 {
     transparent
   }
 }
 
 api.llm.waveyfy.network {
-  reverse_proxy / openai-server:18888 {
+  reverse_proxy / :18888 {
     transparent
   }
 }
 
 control.llm.waveyfy.network {
-  reverse_proxy / openai-server:28888 {
+  reverse_proxy / :28888 {
     transparent
   }
 }
 
 llm.waveyfy.network {
-  reverse_proxy / openai-client:5173 {
+  reverse_proxy / :5173 {
     transparent
   }
 }

@@ -7,12 +7,15 @@
 # Want to help us make this template better? Share your feedback here: https://forms.gle/ybq9Krt8jtBL3iCk7
 
 ARG RUST_VERSION=1.81.0
+ARG APP_NAME
+ARG FEATURES
 
 ################################################################################
 # Create a stage for building the application.
 
 FROM rust:${RUST_VERSION}-alpine AS build
 ARG APP_NAME
+ARG FEATURES
 WORKDIR /app
 
 # Install host build dependencies.
@@ -32,7 +35,7 @@ RUN --mount=type=bind,source=src,target=src \
     --mount=type=cache,target=/app/target/ \
     --mount=type=cache,target=/usr/local/cargo/git/db \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
-cargo build --locked --release --features cuda && \
+cargo build --locked --release --features $FEATURES && \
 cp ./target/release/$APP_NAME /bin/server
 
 ################################################################################
