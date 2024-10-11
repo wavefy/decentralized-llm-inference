@@ -15,11 +15,11 @@ ARG FEATURES
 
 FROM rust:${RUST_VERSION}-alpine AS build
 ARG APP_NAME
-ARG FEATURES
+ARG FEATURES=cuda
 WORKDIR /app
 
 # Install host build dependencies.
-RUN apk add --no-cache clang lld musl-dev git
+RUN apk add --no-cache clang lld musl-dev git perl openssl-libs-static pkgconf openssl-dev cmake make protobuf
 
 # Build the application.
 # Leverage a cache mount to /usr/local/cargo/registry/
@@ -31,13 +31,13 @@ RUN apk add --no-cache clang lld musl-dev git
 # output directory before the cache mounted /app/target is unmounted.
 RUN --mount=type=bind,source=bin,target=bin \
     --mount=type=bind,source=crates,target=crates \
+    --mount=type=bind,source=.cargo,target=.cargo \
     --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
     --mount=type=bind,source=Cargo.lock,target=Cargo.lock \
-    --mount=type=bind,source=.cargo,target=.cargo \
     --mount=type=cache,target=/app/target/ \
     --mount=type=cache,target=/usr/local/cargo/git/db \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
-cargo build --locked --release --features $FEATURES && \
+cargo build -p $APP_NAME --locked --release && \
 cp ./target/release/$APP_NAME /bin/server
 
 ################################################################################
