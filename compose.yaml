@@ -59,3 +59,7 @@ services:
     #   - registry
     command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
     restart: always
+
+volumes:
+  caddy_data:
+  caddy_config:
