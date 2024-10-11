@@ -1,0 +1,64 @@
+# Comments are provided throughout this file to help you get started.
+# If you need more help, visit the Docker Compose reference guide at
+# https://docs.docker.com/go/compose-spec-reference/
+
+# Here the instructions define your application as a service called "server".
+# This service is built from the Dockerfile in the current directory.
+# You can add other services your application may depend on here, such as a
+# database or a cache. For examples, see the Awesome Compose repository:
+# https://github.com/docker/awesome-compose
+services:
+  server:
+    container_name: openai-server
+    depends_on:
+      - registry
+    build:
+      context: .
+      target: final
+      args:
+        APP_NAME: "openai-server"
+    ports:
+      - 18888:18888
+      - 28888:28888
+    command: ["/bin/server", "--http-bind", "0.0.0.0:18888", "--control-bind", "0.0.0.0:28888", "--registry-server", "ws://openai-registry:3000/ws"]
+  client:
+    container_name: openai-client
+    restart: always
+    build:
+      context: ./bin/desktop-app/view
+    ports:
+      - 5173:5173
+    depends_on:
+      - server
+    environment:
+      - VITE_VLLM_URL="https://api.llm.wavefy.network"
+      - VITE_VLLM_CONTROLS_URL="https://control.llm.wavefy.network"
+      - VITE_VLLM_CONTRACT="0xf24a5c56cbaac7756413042d3456bef5e9aa6235defa675df962b7e541f1d20b"
+      - VITE_NODIT_GQL_API="https://aptos-testnet.nodit.io/c4SvS8ZuP7dI9kHC2dRBpFzSKjmFS2eb/v1/graphql"
+  registry:
+    container_name: openai-registry
+    build:
+      context: .
+      target: final
+      args:
+        APP_NAME: "registry-server"
+    ports:
+      - 3000:3000
+    restart: always
+  
+  caddy:
+    container_name: openai-caddy
+    image: caddy:2
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - server
+      - client
+      - registry
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    restart: always
