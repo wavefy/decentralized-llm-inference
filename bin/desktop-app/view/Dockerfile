@@ -52,25 +52,21 @@ RUN pnpm run build
 ################################################################################
 # Create a new stage to run the application with minimal runtime dependencies
 # where the necessary files are copied from the build stage.
-FROM base as final
+FROM nginx:alpine
 
-# Use production node environment by default.
+WORKDIR /usr/share/nginx/
+
+RUN rm -rf html
+RUN mkdir html
+
+WORKDIR /
+
 ENV NODE_ENV production
 
-# Run the application as a non-root user.
-USER node
+COPY ./nginx/nginx.conf /etc/nginx
+COPY --from=build /usr/src/app/dist /usr/share/nginx/html
 
-# Copy package.json so that package manager commands can be used.
-COPY package.json .
-
-# Copy the production dependencies from the deps stage and also
-# the built application from the build stage into the image.
-COPY --from=deps /usr/src/app/node_modules ./node_modules
-COPY --from=build /usr/src/app/dist ./dist
-
-
-# Expose the port that the application listens on.
-EXPOSE 5173
+EXPOSE 80
 
 # Run the application.
-CMD pnpm run preview
+ENTRYPOINT ["nginx", "-g", "daemon off;"]
