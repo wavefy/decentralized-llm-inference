@@ -63,7 +63,7 @@ WORKDIR /
 
 ENV NODE_ENV production
 
-COPY ./nginx/nginx.conf /etc/nginx
+COPY ./nginx.conf /etc/nginx
 COPY --from=build /usr/src/app/dist /usr/share/nginx/html
 
 EXPOSE 80

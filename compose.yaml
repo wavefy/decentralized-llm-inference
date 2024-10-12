@@ -23,7 +23,7 @@ services:
     build:
       context: ./bin/desktop-app/view
     ports:
-      - 5173:5173
+      - 80:5173
     environment:
       - VITE_VLLM_URL="https://api.llm.wavefy.network"
       - VITE_VLLM_CONTROLS_URL="https://control.llm.wavefy.network"
