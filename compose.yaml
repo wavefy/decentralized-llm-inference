@@ -42,6 +42,7 @@ services:
   
   caddy:
     container_name: openai-caddy
+    network_mode: host
     cap_add:
       - NET_ADMIN
     image: caddy:2
