@@ -42,6 +42,8 @@ services:
   
   caddy:
     container_name: openai-caddy
+    cap_add:
+      - NET_ADMIN
     image: caddy:2
     ports:
       - 80:80
