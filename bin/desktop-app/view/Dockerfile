@@ -8,6 +8,10 @@
 
 ARG NODE_VERSION=20.11.1
 ARG PNPM_VERSION=8.6.5
+ARG VITE_VLLM_URL
+ARG VITE_VLLM_CONTROLS_URL
+ARG VITE_NODIT_GQL_API
+ARG VITE_VLLM_CONTRACT
 
 ################################################################################
 # Use node image for base image for all stages.
@@ -37,6 +41,11 @@ RUN --mount=type=bind,source=package.json,target=package.json \
 # Create a stage for building the application.
 FROM deps as build
 
+ARG VITE_VLLM_URL
+ARG VITE_VLLM_CONTROLS_URL
+ARG VITE_NODIT_GQL_API
+ARG VITE_VLLM_CONTRACT
+
 # Download additional development dependencies before building, as some projects require
 # "devDependencies" to be installed to build. If you don't need this, remove this step.
 RUN --mount=type=bind,source=package.json,target=package.json \
@@ -47,6 +56,11 @@ RUN --mount=type=bind,source=package.json,target=package.json \
 # Copy the rest of the source files into the image.
 COPY . .
 # Run the build script.
+ENV VITE_VLLM_URL=$VITE_VLLM_URL
+ENV VITE_VLLM_CONTROLS_URL=$VITE_VLLM_CONTROLS_URL
+ENV VITE_NODIT_GQL_API=$VITE_NODIT_GQL_API
+ENV VITE_VLLM_CONTRACT=$VITE_VLLM_CONTRACT
+
 RUN pnpm run build
 
 ################################################################################

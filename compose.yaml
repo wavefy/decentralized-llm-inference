@@ -22,6 +22,11 @@ services:
     restart: always
     build:
       context: ./bin/desktop-app/view
+      args:
+        VITE_VLLM_URL: https://api.llm.wavefy.network
+        VITE_VLLM_CONTROLS_URL: https://control.llm.wavefy.network
+        VITE_VLLM_CONTRACT: 0xf24a5c56cbaac7756413042d3456bef5e9aa6235defa675df962b7e541f1d20b
+        VITE_NODIT_GQL_API: https://aptos-testnet.nodit.io/c4SvS8ZuP7dI9kHC2dRBpFzSKjmFS2eb/v1/graphql
     ports:
       - 5173:80
     environment:
@@ -40,26 +45,26 @@ services:
   #     - 3000:3000
   #   restart: always
   
-  caddy:
-    container_name: openai-caddy
-    network_mode: host
-    cap_add:
-      - NET_ADMIN
-    image: caddy:2
-    ports:
-      - 80:80
-      - 443:443
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    # depends_on:
-    #   - server
-    #   - client
-    #   - registry
-    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
-    restart: always
+#   caddy:
+#     container_name: openai-caddy
+#     network_mode: host
+#     cap_add:
+#       - NET_ADMIN
+#     image: caddy:2
+#     ports:
+#       - 80:80
+#       - 443:443
+#     volumes:
+#       - ./Caddyfile:/etc/caddy/Caddyfile
+#       - caddy_data:/data
+#       - caddy_config:/config
+#     # depends_on:
+#     #   - server
+#     #   - client
+#     #   - registry
+#     command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+#     restart: always
 
-volumes:
-  caddy_data:
-  caddy_config:
+# volumes:
+#   caddy_data:
+#   caddy_config:
