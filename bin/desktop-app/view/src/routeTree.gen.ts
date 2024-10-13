@@ -17,11 +17,17 @@ import { Route as ChatsChatIdImport } from './routes/chats.$chatId'
 
 // Create Virtual Routes
 
+const HealthLazyImport = createFileRoute('/health')()
 const DashboardLazyImport = createFileRoute('/dashboard')()
 const AboutLazyImport = createFileRoute('/about')()
 const IndexLazyImport = createFileRoute('/')()
 
 // Create/Update Routes
+
+const HealthLazyRoute = HealthLazyImport.update({
+  path: '/health',
+  getParentRoute: () => rootRoute,
+} as any).lazy(() => import('./routes/health.lazy').then((d) => d.Route))
 
 const DashboardLazyRoute = DashboardLazyImport.update({
   path: '/dashboard',
@@ -68,6 +74,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardLazyImport
       parentRoute: typeof rootRoute
     }
+    '/health': {
+      id: '/health'
+      path: '/health'
+      fullPath: '/health'
+      preLoaderRoute: typeof HealthLazyImport
+      parentRoute: typeof rootRoute
+    }
     '/chats/$chatId': {
       id: '/chats/$chatId'
       path: '/chats/$chatId'
@@ -84,6 +97,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexLazyRoute
   '/about': typeof AboutLazyRoute
   '/dashboard': typeof DashboardLazyRoute
+  '/health': typeof HealthLazyRoute
   '/chats/$chatId': typeof ChatsChatIdRoute
 }
 
@@ -91,6 +105,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexLazyRoute
   '/about': typeof AboutLazyRoute
   '/dashboard': typeof DashboardLazyRoute
+  '/health': typeof HealthLazyRoute
   '/chats/$chatId': typeof ChatsChatIdRoute
 }
 
@@ -99,15 +114,16 @@ export interface FileRoutesById {
   '/': typeof IndexLazyRoute
   '/about': typeof AboutLazyRoute
   '/dashboard': typeof DashboardLazyRoute
+  '/health': typeof HealthLazyRoute
   '/chats/$chatId': typeof ChatsChatIdRoute
 }
 
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/dashboard' | '/chats/$chatId'
+  fullPaths: '/' | '/about' | '/dashboard' | '/health' | '/chats/$chatId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/dashboard' | '/chats/$chatId'
-  id: '__root__' | '/' | '/about' | '/dashboard' | '/chats/$chatId'
+  to: '/' | '/about' | '/dashboard' | '/health' | '/chats/$chatId'
+  id: '__root__' | '/' | '/about' | '/dashboard' | '/health' | '/chats/$chatId'
   fileRoutesById: FileRoutesById
 }
 
@@ -115,6 +131,7 @@ export interface RootRouteChildren {
   IndexLazyRoute: typeof IndexLazyRoute
   AboutLazyRoute: typeof AboutLazyRoute
   DashboardLazyRoute: typeof DashboardLazyRoute
+  HealthLazyRoute: typeof HealthLazyRoute
   ChatsChatIdRoute: typeof ChatsChatIdRoute
 }
 
@@ -122,6 +139,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexLazyRoute: IndexLazyRoute,
   AboutLazyRoute: AboutLazyRoute,
   DashboardLazyRoute: DashboardLazyRoute,
+  HealthLazyRoute: HealthLazyRoute,
   ChatsChatIdRoute: ChatsChatIdRoute,
 }
 
@@ -140,6 +158,7 @@ export const routeTree = rootRoute
         "/",
         "/about",
         "/dashboard",
+        "/health",
         "/chats/$chatId"
       ]
     },
@@ -151,6 +170,9 @@ export const routeTree = rootRoute
     },
     "/dashboard": {
       "filePath": "dashboard.lazy.tsx"
+    },
+    "/health": {
+      "filePath": "health.lazy.tsx"
     },
     "/chats/$chatId": {
       "filePath": "chats.$chatId.tsx"

@@ -23,13 +23,19 @@ import {
 import { ReloadIcon, CopyIcon, ExternalLinkIcon } from "@radix-ui/react-icons";
 import useLocalStorageState from "use-local-storage-state";
 import { toast } from "sonner";
-import { generateNewAccount, getStoredAccountAddress, getAccountBalance, fundAccount } from "@/lib/contract";
+import {
+  generateNewAccount,
+  getStoredAccountAddress,
+  getAccountBalance,
+  fundAccount,
+} from "@/lib/contract";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import { Separator } from "./ui/separator";
 
 const MODELS: any = {
   "llama32-1b": {
@@ -60,9 +66,7 @@ const P2pConfigWidget = ({ status }: { status?: P2PStatus }) => {
   const [warning, setWarning] = useState<string | null>(null);
   const [startLayer, setStartLayer] = useState<number>(0);
   const [endLayer, setEndLayer] = useState<number>(18);
-  const [privateKey, setPrivateKey] = useLocalStorageState("dllm_pk", {
-    defaultValue: "0x3bba41ade33b801bf3e42a080a699e73654eaf1775fb0afc5d65f5449e55d74b",
-  });
+  const [privateKey, setPrivateKey] = useLocalStorageState<string>("dllm_pk");
   const [accountAddress, setAccountAddress] = useState<string | null>(null);
   const [accountBalance, setAccountBalance] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -135,6 +139,9 @@ const P2pConfigWidget = ({ status }: { status?: P2PStatus }) => {
     try {
       setError(null);
       setLoading(true);
+      if (!accountAddress || !privateKey) {
+        throw new Error("No account address found.");
+      }
       await startP2pSession(controlBasePath, {
         model: selectedModel,
         from_layer: startLayer,
@@ -181,7 +188,7 @@ const P2pConfigWidget = ({ status }: { status?: P2PStatus }) => {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
-      toast.success('Copied to clipboard');
+      toast.success("Copied to clipboard");
     });
   };
 
@@ -194,10 +201,16 @@ const P2pConfigWidget = ({ status }: { status?: P2PStatus }) => {
       <Alert className="mt-4">
         <AlertTitle>Fund Your Account</AlertTitle>
         <AlertDescription>
-          Your account needs funds to start a P2P session. Please use the Aptos faucet to transfer some APT to your account.
+          Your account needs funds to start a P2P session. Please use the Aptos
+          faucet to transfer some APT to your account.
           <div className="mt-2">
             <Button variant="outline" size="sm" asChild>
-              <a href="https://aptoslabs.com/testnet-faucet" target="_blank" rel="noopener noreferrer" className="flex items-center">
+              <a
+                href="https://aptoslabs.com/testnet-faucet"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center"
+              >
                 Go to Aptos Faucet
                 <ExternalLinkIcon className="ml-2 h-4 w-4" />
               </a>
@@ -216,6 +229,62 @@ const P2pConfigWidget = ({ status }: { status?: P2PStatus }) => {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
+      <div className="space-y-2 text-center">
+        <Button
+          onClick={handleGenerateAccount}
+          className="w-full"
+          disabled={isGeneratingAccount}
+        >
+          {isGeneratingAccount ? (
+            <>
+              <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+              Generating Account...
+            </>
+          ) : (
+            "Generate New Account"
+          )}
+        </Button>
+        <p className="text-xs text-left text-yellow-500">Generating a new Aptos Account and fund it with 1 APT from testnet faucet. Remember to save the generated privatekey somewhere available to you just incase.</p>
+        <Separator className="my-6" />
+        <Label htmlFor="privateKey" className="text-center">Or</Label>
+        <Input
+          id="privateKey"
+          type="text"
+          value={privateKey}
+          onChange={(e) => setPrivateKey(e.target.value)}
+          placeholder="Enter your private key"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="account">Account</Label>
+        {accountAddress ? (
+          <div className="flex items-center justify-between">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="cursor-pointer flex items-center gap-1"
+                    onClick={() => copyToClipboard(accountAddress)}
+                  >
+                    {shortenAddress(accountAddress)}
+                    <CopyIcon className="w-3 h-3" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{accountAddress}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            {accountBalance && (
+              <span className="text-sm">Balance: {accountBalance} APT</span>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">
+            No account associated with this private key
+          </p>
+        )}
+      </div>
       {status?.model ? (
         <div>
           <div>
@@ -309,66 +378,20 @@ const P2pConfigWidget = ({ status }: { status?: P2PStatus }) => {
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="privateKey">Private Key</Label>
-                  <Input
-                    id="privateKey"
-                    type="text"
-                    value={privateKey}
-                    onChange={(e) => setPrivateKey(e.target.value)}
-                    placeholder="Enter your private key"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="account">Account</Label>
-                  {accountAddress ? (
-                    <div className="flex items-center justify-between">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span 
-                              className="cursor-pointer flex items-center gap-1"
-                              onClick={() => copyToClipboard(accountAddress)}
-                            >
-                              {shortenAddress(accountAddress)}
-                              <CopyIcon className="w-3 h-3" />
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>{accountAddress}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      {accountBalance && (
-                        <span className="text-sm">Balance: {accountBalance} APT</span>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">No account associated with this private key</p>
-                  )}
-                </div>
-                <Button 
-                  onClick={handleGenerateAccount} 
-                  className="w-full"
-                  disabled={isGeneratingAccount}
-                >
-                  {isGeneratingAccount ? (
-                    <>
-                      <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-                      Generating Account...
-                    </>
-                  ) : (
-                    "Generate New Account"
-                  )}
-                </Button>
-                {renderFaucetNotice()}
               </div>
             )}
           </div>
           <div className="mt-4">
             <Button
               onClick={handleStart}
-              disabled={!selectedModel || startLayer >= endLayer || loading || !privateKey || !accountBalance || parseFloat(accountBalance) === 0}
+              disabled={
+                !selectedModel ||
+                startLayer >= endLayer ||
+                loading ||
+                !privateKey ||
+                !accountBalance ||
+                parseFloat(accountBalance) === 0
+              }
               className="w-full"
             >
               {loading ? (

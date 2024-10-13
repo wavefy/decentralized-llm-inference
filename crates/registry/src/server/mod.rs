@@ -6,27 +6,43 @@ use poem::{
     EndpointExt, IntoResponse, Route, Server,
 };
 use protobuf_stream::ProtobufStream;
+use serde::Serialize;
 use std::{collections::HashMap, net::SocketAddr};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 mod protobuf_stream;
 mod session_manager;
 
-use session_manager::SessionManager;
+use session_manager::{NodeInfo, SessionManager};
 
-use crate::{ModelDistribution, ModelId};
+use crate::{get_model_info, ModelDistribution, ModelId, ModelInfo, SUPPORTED_MODELS};
 
 enum StreamEvent {
     Start(ModelId, NodeId, Sender<protocol::registry::to_worker::Event>),
     Event(ModelId, NodeId, protocol::registry::to_registry::Event),
     End(ModelId, NodeId),
     Distribution(ModelId, Sender<ModelDistribution>),
+    Health(Sender<Vec<ModelSwarmHealth>>),
 }
 
 pub struct RegistryServer {
     models: HashMap<ModelId, SessionManager>,
     stream_rx: Receiver<StreamEvent>,
     streams_tx: HashMap<(ModelId, NodeId), Sender<protocol::registry::to_worker::Event>>,
+}
+
+#[derive(Serialize)]
+struct SwarmNode {
+    id: String,
+    info: NodeInfo,
+}
+
+#[derive(Serialize)]
+struct ModelSwarmHealth {
+    model: String,
+    total_layers: usize,
+    memory: usize,
+    nodes: Vec<SwarmNode>,
 }
 
 impl RegistryServer {
@@ -36,7 +52,9 @@ impl RegistryServer {
             log::info!("[RegistryServer] listen on ws://{http_addr}");
             let app = Route::new()
                 .at("/api/:model/distribution", get(distribution.data(stream_tx.clone())))
-                .at("/ws/:model/:node", get(ws.data(stream_tx)));
+                .at("/ws/:model/:node", get(ws.data(stream_tx.clone())))
+                .at("/api/health", get(health.data(stream_tx)))
+                .at("/api/models", get(list_models));
 
             Server::new(TcpListener::bind(http_addr)).run(app).await
         });
@@ -86,6 +104,43 @@ impl RegistryServer {
                     log::error!("[RegistryServer] send distribution to stream error {e:?}");
                 }
             }
+            StreamEvent::Health(tx) => {
+                let res: Vec<ModelSwarmHealth> = self
+                    .models
+                    .iter()
+                    .map(|(model, session)| {
+                        let nodes: Vec<SwarmNode> = session
+                            .nodes()
+                            .iter()
+                            .map(|(node, info)| SwarmNode {
+                                id: node.0.clone(),
+                                info: info.clone(),
+                            })
+                            .collect();
+                        let model_info = get_model_info(&model.0);
+                        if model_info.is_none() {
+                            log::warn!("[RegistryServer] Unexpected model, Mode {} not found", &model.0);
+                        }
+                        match model_info {
+                            Some(ModelInfo { id: _, layers, memory }) => ModelSwarmHealth {
+                                model: model.0.clone(),
+                                total_layers: *layers,
+                                memory: *memory,
+                                nodes,
+                            },
+                            _ => ModelSwarmHealth {
+                                model: model.0.clone(),
+                                total_layers: 0,
+                                memory: 0,
+                                nodes,
+                            },
+                        }
+                    })
+                    .collect();
+                if let Err(e) = tx.send(res).await {
+                    log::error!("[RegistryServer] send health to stream error {e:?}");
+                }
+            }
         }
         Some(())
     }
@@ -98,6 +153,19 @@ async fn distribution(Path(model): Path<String>, stream_tx: Data<&Sender<StreamE
     stream_tx.send(StreamEvent::Distribution(model_id.clone(), tx)).await.expect("Should send event main");
     let res = rx.recv().await.unwrap();
     Json(res).into_response()
+}
+
+#[handler]
+async fn health(stream_tx: Data<&Sender<StreamEvent>>) -> impl IntoResponse {
+    let (tx, mut rx) = channel(10);
+    stream_tx.send(StreamEvent::Health(tx)).await.expect("Should send event health");
+    let res = rx.recv().await.unwrap();
+    Json(res).into_response()
+}
+
+#[handler]
+async fn list_models() -> impl IntoResponse {
+    Json(SUPPORTED_MODELS).into_response()
 }
 
 #[handler]

@@ -20,3 +20,37 @@ pub enum AnswerError {
 pub struct ModelDistribution {
     pub layers: Vec<usize>,
 }
+
+#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelInfo {
+    pub id: &'static str,
+    pub layers: usize,
+    pub memory: usize,
+}
+
+pub const SUPPORTED_MODELS: [ModelInfo; 4] = [
+    ModelInfo {
+        id: "llama32-1b",
+        layers: 16,
+        memory: 3,
+    },
+    ModelInfo {
+        id: "llama32-3b",
+        layers: 28,
+        memory: 8,
+    },
+    ModelInfo {
+        id: "llama32-vision-11b",
+        layers: 40,
+        memory: 25,
+    },
+    ModelInfo {
+        id: "phi3",
+        layers: 32,
+        memory: 4,
+    },
+];
+
+pub fn get_model_info(id: &str) -> Option<&ModelInfo> {
+    SUPPORTED_MODELS.iter().find(|m| m.id == id)
+}

@@ -11,6 +11,7 @@ export const basePath = import.meta.env.VITE_VLLM_URL ?? "";
 export const controlBasePath = import.meta.env.VITE_VLLM_CONTROLS_URL ?? "";
 export const contractAddress = import.meta.env.VITE_VLLM_CONTRACT ?? "";
 export const noditApiUrl = import.meta.env.VITE_NODIT_GQL_API ?? "";
+export const registryUrl = import.meta.env.VITE_REGISTRY_URL ?? "";
 
 export function useHasMounted() {
   const [hasMounted, setHasMounted] = useState(false);

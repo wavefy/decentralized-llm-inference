@@ -7,9 +7,10 @@ import { ChatRequestOptions } from "ai";
 import llama3Tokenizer from "llama3-tokenizer-js";
 import TextareaAutosize from "react-textarea-autosize";
 
-import { basePath, useHasMounted } from "@/lib/utils";
+import { basePath, controlBasePath, useHasMounted } from "@/lib/utils";
 import { getTokenLimit } from "@/lib/token-counter";
 import { Button } from "../ui/button";
+import { useP2PStatus } from "@/queries/p2p";
 
 interface ChatBottombarProps {
   selectedModel: string | undefined;
@@ -34,11 +35,13 @@ export default function ChatBottombar({
   const hasMounted = useHasMounted();
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
   const hasSelectedModel = selectedModel && selectedModel !== "";
+  const { status } = useP2PStatus({ baseControlUrl: controlBasePath });
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey && hasSelectedModel && !isLoading) {
       e.preventDefault();
-      handleSubmit(e as unknown as React.FormEvent<HTMLFormElement>);
+      status?.topup_balance &&
+        handleSubmit(e as unknown as React.FormEvent<HTMLFormElement>);
     }
   };
 
@@ -54,11 +57,10 @@ export default function ChatBottombar({
 
   return (
     <div>
-      <div className="stretch flex flex-row gap-3 last:mb-2 md:last:mb-6 mx-2 md:mx-4 md:mx-auto md:max-w-2xl xl:max-w-3xl">
-        {/* <div className="p-2 pb-1 flex justify-between w-full items-center "> */}
+      <div className="stretch flex flex-row gap-3 last:mb-2 md:last:mb-6 mx-2 md:mx-auto md:max-w-2xl xl:max-w-3xl">
         <div key="input" className="w-full relative mb-1 items-center">
           <form
-            onSubmit={handleSubmit}
+            onSubmit={(e) => status?.topup_balance && handleSubmit(e)}
             className="w-full items-center flex relative gap-2"
           >
             <TextareaAutosize
@@ -68,7 +70,12 @@ export default function ChatBottombar({
               onKeyDown={handleKeyPress}
               onChange={handleInputChange}
               name="message"
-              placeholder="Ask vLLM anything..."
+              placeholder={
+                status?.topup_balance
+                  ? "Ask vLLM anything..."
+                  : "Deposit to your Top up your balance to start chatting"
+              }
+              disabled={!status?.topup_balance}
               className="border-input max-h-48 px-4 py-4 text-base shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 dark:focus-visible:ring-slate-500 disabled:cursor-not-allowed disabled:opacity-50 w-full border rounded-md flex items-center h-14 resize-none overflow-hidden dark:bg-card/35 pr-32"
             />
             <div className="text-xs text-muted-foreground absolute right-14 px-0 text-right">
@@ -87,7 +94,12 @@ export default function ChatBottombar({
                 size="icon"
                 className="absolute bottom-1.5 md:bottom-2 md:right-2 right-2 z-100"
                 type="submit"
-                disabled={isLoading || !input.trim() || !hasSelectedModel}
+                disabled={
+                  isLoading ||
+                  !input.trim() ||
+                  !hasSelectedModel ||
+                  !status?.topup_balance
+                }
               >
                 <PaperPlaneIcon className="w-5 h-5 text-white dark:text-black" />
               </Button>
