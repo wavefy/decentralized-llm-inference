@@ -11,6 +11,8 @@ rand = { workspace = true }
 prost = { workspace = true }
 local-ip-address = "0.6"
 stun-coder = "2.0"
+serde = { workspace = true }
+bincode = { workspace = true }
 
 [features]
 default = ["full"]

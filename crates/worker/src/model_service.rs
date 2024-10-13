@@ -174,6 +174,7 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
             if let Ok(req) = self.usage_service.pre_forward(container.chat_id, req.clone()).await {
                 log::info!("[ModelService] session {} forward step {} processing ...", req.session, req.step);
                 let embedding = if let Some(layers) = container.local {
+                    log::info!("[ModelService] session {} forward step {} local {layers:?} layers ...", req.session, req.step);
                     let embedding = TensorBuf::try_from(req.embedding.clone()).unwrap().to_tensor(&self.device).unwrap();
                     let (embedding, _) = self.layers.forward(Session(req.session), req.step, (embedding, req.seq_len), req.index_pos).await.unwrap();
                     log::info!("[ModelService] session {} forward step {} local {layers:?} layers done", req.session, req.step);
@@ -184,10 +185,11 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
 
                 let res = if let Some((dest, remote_session)) = &container.remote {
                     log::info!(
-                        "[ModelService] session {} forward step {} remote {dest:?} with remote session {}",
+                        "[ModelService] session {} forward step {} remote {dest:?} with remote session {}, embedding {} bytes",
                         req.session,
                         req.step,
-                        remote_session.0
+                        remote_session.0,
+                        embedding.len(),
                     );
                     let res = self
                         .rpc

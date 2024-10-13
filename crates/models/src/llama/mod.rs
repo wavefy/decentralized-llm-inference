@@ -17,7 +17,7 @@ const EOS_TOKEN: &str = "</s>";
 const USE_KV_CACHE: bool = true;
 
 use crate::{
-    http_api::{ChatCompletionRequest, StringOrVecContent},
+    http_api::ChatCompletionRequest,
     logits_processor::{LogitsProcessor, Sampling},
     token_output_stream::TokenOutputStream,
     utils::{apply_repeat_penalty, hub_load_safetensors},
@@ -91,34 +91,27 @@ impl<W: ModelLayersWorker<(Tensor, u32)>> LlamaModel<W> {
 #[async_trait::async_trait]
 impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for LlamaModel<W> {
     fn build_prompt(&self, request: &ChatCompletionRequest) -> String {
-        // let mut prompt = String::from("<|begin_of_text|>");
-        // for message in &request.messages {
-        //     match message.role.as_str() {
-        //         "system" => {
-        //             prompt.push_str(&format!("<|start_header_id|>system<|end_header_id|>\n{}<|eot_id|>", message.content[0].text));
-        //         }
-        //         "user" => {
-        //             prompt.push_str(&format!("<|start_header_id|>user<|end_header_id|>\n{}<|eot_id|>", message.content[0].text));
-        //         }
-        //         "assistant" => {
-        //             prompt.push_str(&format!("<|start_header_id|>assistant<|end_header_id|>\n{}<|eot_id|>", message.content[0].text));
-        //         }
-        //         _ => panic!("unsupported role: {}", message.role),
-        //     }
-        // }
-        // prompt.push_str("<|start_header_id|>assistant<|end_header_id|>");
-        // prompt
-
-        // TODO: currently too big prompt cause RPC error, temporary solution is to use only the last user message
-        for message in request.messages.iter().rev() {
-            if message.role == "user" {
-                match &message.content {
-                    StringOrVecContent::String(text) => return text.clone(),
-                    StringOrVecContent::Vec(messages) => return messages[0].text.clone(),
+        let mut prompt = String::from("<|begin_of_text|>");
+        for message in &request.messages {
+            for content in message.content.contents() {
+                match message.role.as_str() {
+                    "system" => {
+                        prompt.push_str(&format!("<|start_header_id|>system<|end_header_id|>\n{content}<|eot_id|>"));
+                    }
+                    "user" => {
+                        prompt.push_str(&format!("<|start_header_id|>user<|end_header_id|>\n{content}<|eot_id|>"));
+                    }
+                    "assistant" => {
+                        prompt.push_str(&format!("<|start_header_id|>assistant<|end_header_id|>\n{content}<|eot_id|>"));
+                    }
+                    _ => {
+                        log::warn!("unsupported role: {}", message.role)
+                    }
                 }
             }
         }
-        "".to_string()
+        prompt.push_str("<|start_header_id|>assistant<|end_header_id|>");
+        prompt
     }
 
     async fn chat(&self, session: Session, cfg: ChatCfg, prompt: &str, tx: Sender<String>) -> Result<()> {

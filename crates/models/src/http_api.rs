@@ -7,6 +7,15 @@ pub enum StringOrVecContent {
     Vec(Vec<MessageContent>),
 }
 
+impl StringOrVecContent {
+    pub fn contents(&self) -> Vec<&str> {
+        match self {
+            StringOrVecContent::String(c) => vec![c],
+            StringOrVecContent::Vec(vec) => vec.iter().map(|c| c.text.as_str()).collect::<Vec<_>>(),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MessageContent {
     #[serde(rename = "type")]

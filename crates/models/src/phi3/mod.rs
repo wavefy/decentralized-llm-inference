@@ -73,21 +73,21 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
     fn build_prompt(&self, request: &ChatCompletionRequest) -> String {
         let mut prompt = String::new();
         for message in &request.messages {
-            let text = match message.content {
-                StringOrVecContent::String(ref s) => s,
-                StringOrVecContent::Vec(ref v) => &v[0].text,
-            };
-            match message.role.as_str() {
-                "system" => {
-                    prompt.push_str(&format!("<|system|>\n{}<|end|>", text));
+            for content in message.content.contents() {
+                match message.role.as_str() {
+                    "system" => {
+                        prompt.push_str(&format!("<|system|>\n{content}<|end|>"));
+                    }
+                    "user" => {
+                        prompt.push_str(&format!("<|user|>\n{content}<|end|>"));
+                    }
+                    "assistant" => {
+                        prompt.push_str(&format!("<|assistant|>\n{content}<|end|>"));
+                    }
+                    _ => {
+                        log::warn!("unsupported role: {}", message.role)
+                    }
                 }
-                "user" => {
-                    prompt.push_str(&format!("<|user|>\n{}<|end|>", text));
-                }
-                "assistant" => {
-                    prompt.push_str(&format!("<|assistant|>\n{}<|end|>", text));
-                }
-                _ => panic!("unsupported role: {}", message.role),
             }
         }
         prompt.push_str("<|assistant|>\n");
