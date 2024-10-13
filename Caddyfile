@@ -1,0 +1,15 @@
+registry.llm.wavefy.network {
+  reverse_proxy localhost:3000 
+}
+
+api.llm.wavefy.network {
+  reverse_proxy localhost:18888
+}
+
+control.llm.wavefy.network {
+  reverse_proxy localhost:28888 
+}
+
+llm.waveyfy.network {
+  reverse_proxy localhost:5173 
+}

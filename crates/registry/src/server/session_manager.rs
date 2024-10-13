@@ -1,19 +1,19 @@
 use std::{
-    collections::{HashMap, VecDeque},
-    ops::Range,
+    collections::{HashMap, VecDeque}, hash::Hash, ops::Range
 };
 
 use p2p_network::addr::NodeId;
 use protocol::registry::to_worker::{NeighboursReply, UpdateReply};
+use serde::Serialize;
 
 use crate::ModelDistribution;
 
-#[derive(Default, Debug)]
-struct NodeInfo {
+#[derive(Default, Debug, Serialize, Clone)]
+pub struct NodeInfo {
     layers: Option<Range<u32>>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SessionManager {
     nodes: HashMap<NodeId, NodeInfo>,
     events: VecDeque<(NodeId, protocol::registry::to_worker::Event)>,
@@ -22,6 +22,10 @@ pub struct SessionManager {
 impl SessionManager {
     pub fn on_start(&mut self, node: NodeId) {
         self.nodes.insert(node, Default::default());
+    }
+
+    pub fn nodes(&self) -> &HashMap<NodeId, NodeInfo> {
+        &self.nodes
     }
 
     // TODO: make it more efficient

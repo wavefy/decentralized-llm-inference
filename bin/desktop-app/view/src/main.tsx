@@ -1,18 +1,34 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import './tailwind.css';
-import './globalStyles.css';
-import 'react-toastify/dist/ReactToastify.css';
-import {UserProvider} from "./UserContext";
-import App from "./App";
-import './i18n'; // sideEffects: true
+import "./index.css";
 
-const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
+import { StrictMode } from "react";
+import ReactDOM from "react-dom/client";
+import { RouterProvider, createRouter } from "@tanstack/react-router";
 
-root.render(
-    <React.StrictMode>
-      <UserProvider>
-        <App/>
-      </UserProvider>
-    </React.StrictMode>
-);
+// Import the generated route tree
+import { routeTree } from "./routeTree.gen";
+import { Providers } from "./components/providers";
+
+// Create a new router instance
+const router = createRouter({ routeTree });
+
+// Register the router instance for type safety
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: typeof router;
+  }
+}
+
+
+
+// Render the app
+const rootElement = document.getElementById("root")!;
+if (!rootElement.innerHTML) {
+  const root = ReactDOM.createRoot(rootElement);
+  root.render(
+    <StrictMode>
+      <Providers>
+        <RouterProvider router={router} />
+      </Providers>
+    </StrictMode>
+  );
+}
