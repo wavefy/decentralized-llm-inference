@@ -6863,10 +6863,12 @@ dependencies = [
 name = "p2p-network"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "local-ip-address",
  "log",
  "prost 0.13.1",
  "rand 0.8.5",
+ "serde",
  "str0m",
  "stun-coder",
  "tokio",
