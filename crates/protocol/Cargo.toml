@@ -9,6 +9,7 @@ model-router = { path = "../model-router" }
 rand = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }
+serde = { workspace = true }
 
 [build-dependencies]
 prost-build = { workspace = true }

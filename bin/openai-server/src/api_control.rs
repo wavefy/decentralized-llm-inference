@@ -1,9 +1,10 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use contract::{
     aptos_sdk::{rest_client::AptosBaseUrl, types::LocalAccount},
     OnChainService,
 };
+use openai_http::ModelStore;
 use poem::{
     handler,
     http::StatusCode,
@@ -17,7 +18,7 @@ use tokio::sync::{
     oneshot, Mutex,
 };
 
-use crate::{start_server, WorkerControl};
+use crate::worker::{run_model_worker, WorkerControl};
 
 pub struct ModelState {
     model: String,
@@ -31,78 +32,70 @@ pub struct ModelState {
 pub struct P2pState {
     pub registry_server: String,
     pub node_id: String,
-    pub http_bind: SocketAddr,
     pub stun_server: String,
-    pub model: Arc<Mutex<Option<ModelState>>>,
+    pub store: ModelStore,
+    pub models: Arc<Mutex<HashMap<String, ModelState>>>,
 }
 
 #[derive(Debug, Serialize)]
-struct ModelConfig {
+struct ModelStatus {
+    status: String,
     model: String,
     from_layer: u32,
     to_layer: u32,
+    peers: Vec<String>,
+    sessions: u32,
+    wallet: WalletStatus,
+}
+
+#[derive(Debug, Serialize)]
+struct WalletStatus {
+    spending: u64,
+    earning: u64,
+    balance: Option<u64>,
+    topup_balance: Option<u64>,
+    address: String,
 }
 
 #[derive(Debug, Serialize)]
 struct P2pStatusRes {
-    model: Option<ModelConfig>,
-    spending: Option<u64>,
-    earning: Option<u64>,
-    balance: Option<u64>,
-    peers: Option<u32>,
-    sessions: Option<u32>,
-    topup_balance: Option<u64>,
-    status: String,
-    address: Option<String>,
+    models: Vec<ModelStatus>,
 }
 
 #[handler]
 pub async fn p2p_status(data: Data<&P2pState>) -> Response {
-    let model = data.model.lock().await;
-    let status = if let Some(model) = model.as_ref() {
+    let models = data.models.lock().await;
+    let mut list_models = vec![];
+
+    for model in models.values() {
         let (tx, rx) = oneshot::channel();
         model.query_tx.send(WorkerControl::Status(tx)).await.unwrap();
         let status = rx.await.unwrap();
-        let topup_balance = model.wallet.topup_balance().await;
-        let balance = model.wallet.current_balance().await;
-        let earning = model.wallet.earning_token_count();
-        let spending = model.wallet.spending_token_count();
-        let address = model.wallet.address().to_string();
 
-        P2pStatusRes {
+        let status = ModelStatus {
             status: if status.ready {
                 "ready"
             } else {
                 "incomplete"
             }
             .to_string(),
-            model: Some(ModelConfig {
-                model: model.model.clone(),
-                from_layer: model.from_layer,
-                to_layer: model.to_layer,
-            }),
-            spending: Some(spending),
-            earning: Some(earning),
-            balance: balance,
-            topup_balance,
-            peers: Some(status.peers.len() as u32),
-            sessions: Some(status.sessions.len() as u32),
-            address: Some(address),
-        }
-    } else {
-        P2pStatusRes {
-            status: "stopped".to_string(),
-            model: None,
-            spending: None,
-            earning: None,
-            balance: None,
-            peers: None,
-            sessions: None,
-            topup_balance: None,
-            address: None,
-        }
-    };
+            peers: status.peers,
+            sessions: status.sessions.len() as u32,
+            model: model.model.clone(),
+            from_layer: model.from_layer,
+            to_layer: model.to_layer,
+            wallet: WalletStatus {
+                spending: model.wallet.spending_token_count(),
+                earning: model.wallet.earning_token_count(),
+                balance: model.wallet.current_balance().await,
+                topup_balance: model.wallet.topup_balance().await,
+                address: model.wallet.address().to_string(),
+            },
+        };
+        list_models.push(status);
+    }
 
+    let status = P2pStatusRes { models: list_models };
     Response::builder().header("Content-Type", "application/json").body(Body::from_json(&status).unwrap())
 }
 
@@ -119,14 +112,13 @@ struct P2pStartRes {}
 
 #[handler]
 pub async fn p2p_start(body: Json<P2pStart>, data: Data<&P2pState>) -> Response {
-    let mut current_model = data.model.lock().await;
-    if current_model.is_some() {
+    let mut models = data.models.lock().await;
+    if models.contains_key(&body.model) {
         return Response::builder().status(StatusCode::BAD_REQUEST).body(Body::from_string("Model already started".to_string()));
     }
 
     let registry_server = data.registry_server.clone();
     let node_id = data.node_id.clone();
-    let http_bind = data.http_bind;
     let stun_server = data.stun_server.clone();
     let model = body.model.clone();
     let range = body.from_layer..body.to_layer;
@@ -137,8 +129,9 @@ pub async fn p2p_start(body: Json<P2pStart>, data: Data<&P2pState>) -> Response 
 
     let usage_service = Arc::new(onchain_service);
     let wallet = usage_service.clone();
+    let store = data.store.clone();
     tokio::spawn(async move {
-        start_server(&registry_server, &model, &node_id, range, http_bind, &stun_server, query_rx, usage_service).await;
+        run_model_worker(&registry_server, &model, &node_id, range, &stun_server, query_rx, usage_service, store).await;
     });
     let model_state = ModelState {
         model: body.model.clone(),
@@ -147,23 +140,28 @@ pub async fn p2p_start(body: Json<P2pStart>, data: Data<&P2pState>) -> Response 
         query_tx,
         wallet,
     };
-    *current_model = Some(model_state);
+    models.insert(body.model.clone(), model_state);
     Response::builder().status(StatusCode::OK).body(Body::from_json(&P2pStartRes {}).unwrap())
+}
+
+#[derive(Debug, Deserialize)]
+struct P2pStop {
+    model: String,
 }
 
 #[derive(Debug, Serialize)]
 struct P2pStopRes {}
 
 #[handler]
-pub async fn p2p_stop(data: Data<&P2pState>) -> Response {
-    let mut current_model = data.model.lock().await;
-    if let Some(model) = current_model.as_ref() {
+pub async fn p2p_stop(body: Json<P2pStop>, data: Data<&P2pState>) -> Response {
+    let mut models = data.models.lock().await;
+    if let Some(model) = models.get_mut(&body.model) {
         let (tx, rx) = oneshot::channel();
         log::info!("p2p_stop: sending stop signal");
         model.query_tx.send(WorkerControl::Stop(tx)).await.unwrap();
         rx.await.unwrap();
         log::info!("p2p_stop: stop ack signal received");
-        *current_model = None;
+        models.remove(&body.model);
         Response::builder().status(StatusCode::OK).body(Body::from_json(&P2pStopRes {}).unwrap())
     } else {
         return Response::builder().status(StatusCode::BAD_REQUEST).body(Body::from_string("Model not started".to_string()));

@@ -7,7 +7,7 @@ use candle_core::{Device, Result, Shape, Tensor};
 use protocol::Session;
 use tokio::sync::mpsc::Sender;
 
-use crate::{http_api::ChatCompletionRequest, ChatCfg, ChatModel, ModelLayersWorker};
+use crate::{ChatCfg, ChatCompletionRequest, ChatModel, ModelLayersWorker};
 
 pub struct FakeModel<W: ModelLayersWorker<(Tensor, u32)>> {
     device: Device,

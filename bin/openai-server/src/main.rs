@@ -1,22 +1,12 @@
 use clap::Parser;
-use contract::{
-    aptos_sdk::{rest_client::AptosBaseUrl, types::LocalAccount},
-    OnChainService,
-};
-use openai_server::{start_control_server, start_server};
-use std::{net::SocketAddr, ops::Range, sync::Arc};
-use tokio::sync::mpsc::channel;
-use tracing_subscriber::layer;
+use openai_server::{start_http_server, ServerMode};
+use std::net::SocketAddr;
 use utils::random_node_id;
 
 /// OpenAI Server for decentralized LLM
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// status bind addr
-    #[arg(env, long, default_value = "127.0.0.1:18889")]
-    control_bind: SocketAddr,
-
     /// http bind addr
     #[arg(env, long, default_value = "127.0.0.1:18888")]
     http_bind: SocketAddr,
@@ -33,21 +23,8 @@ struct Args {
     #[arg(env, long)]
     node_id: Option<String>,
 
-    /// model id
-    #[arg(env, long)]
-    model: Option<String>,
-
-    /// model layers, layer 0 is embeding work, from 1 is for matrix jobs
-    #[arg(env, long)]
-    layers_from: Option<u32>,
-
-    /// model layers, layer 0 is embeding work, from 1 is for matrix jobs
-    #[arg(env, long)]
-    layers_to: Option<u32>,
-
-    /// Private key
-    #[arg(env, long)]
-    private_key: Option<String>,
+    #[command(subcommand)]
+    mode: ServerMode,
 }
 
 #[tokio::main]
@@ -62,28 +39,5 @@ async fn main() {
 
     let node_id = args.node_id.unwrap_or_else(random_node_id);
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
-    if let Some(model) = args.model {
-        let layers_from = args.layers_from.unwrap_or(0);
-        let layers_to = args.layers_to.unwrap_or(0);
-        let account = LocalAccount::from_private_key(&args.private_key.unwrap(), 0).expect("Invalid private key");
-        let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, layers_from..layers_to);
-        onchain_service.init().await;
-
-        let usage_service = Arc::new(onchain_service);
-
-        let (_query_tx, query_rx) = channel(10);
-        start_server(
-            &args.registry_server,
-            &model,
-            &node_id,
-            layers_from..layers_to,
-            args.http_bind,
-            &args.stun_server,
-            query_rx,
-            usage_service,
-        )
-        .await;
-    } else {
-        start_control_server(args.control_bind, &args.registry_server, &node_id, args.http_bind, &args.stun_server).await;
-    }
+    start_http_server(args.http_bind, &args.registry_server, &node_id, &args.stun_server, args.mode).await;
 }

@@ -39,7 +39,7 @@ export default function ChatPage({ chatId, setChatId }: ChatPageProps) {
     "chatOptions",
     {
       defaultValue: {
-        selectedModel: "local-model",
+        selectedModel: "llama32-1b",
         systemPrompt: "",
         temperature: 0.9,
       },
@@ -48,10 +48,10 @@ export default function ChatPage({ chatId, setChatId }: ChatPageProps) {
   const { status } = useP2PStatus({ baseControlUrl: controlBasePath });
 
   useEffect(() => {
-    if (status?.model) {
+    if (status?.models[0].model) {
       setChatOptions({
         ...chatOptions,
-        selectedModel: status.model.model,
+        selectedModel: status.models[0].model,
       });
     }
   }, [status]);

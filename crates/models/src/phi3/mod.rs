@@ -13,10 +13,9 @@ use tokenizers::Tokenizer;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
-    http_api::{ChatCompletionRequest, StringOrVecContent},
     logits_processor::{LogitsProcessor, Sampling},
     token_output_stream::TokenOutputStream,
-    utils, ChatCfg, ChatModel, ModelLayersWorker, ModelPostprocessor, ModelPreprocessor, Session,
+    utils, ChatCfg, ChatCompletionRequest, ChatModel, ModelLayersWorker, ModelPostprocessor, ModelPreprocessor, Session,
 };
 
 mod internal;

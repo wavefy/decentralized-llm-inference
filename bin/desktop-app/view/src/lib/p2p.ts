@@ -1,17 +1,21 @@
-export interface P2PStatus {
-  model?: {
-    model: string;
-    from_layer: number;
-    to_layer: number;
-  };
-  spending?: number;
-  earning?: number;
-  balance?: number;
-  peers?: number;
-  sessions?: number;
-  topup_balance?: number;
+export interface ModelStatus {
   status: string;
-  address?: string;
+  model: string;
+  from_layer: number;
+  to_layer: number;
+  peers: string[];
+  sessions: number;
+  wallet: {
+    spending: number;
+    earning: number;
+    balance?: number;
+    topup_balance?: number;
+    address: string;
+  }
+}
+
+export interface P2PStatus {
+  models: ModelStatus[];
 }
 
 export interface P2PStartRequest {

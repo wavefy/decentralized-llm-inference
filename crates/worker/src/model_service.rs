@@ -2,13 +2,13 @@ use std::{ops::Range, sync::Arc};
 
 use candle_core::{Device, Tensor};
 use model_router::RouteTable;
-use models::{remote::TensorBuf, ChatCfg, ModelLayersWorker};
+use models::{remote::TensorBuf, ModelLayersWorker};
 use p2p_network::addr::NodeId;
 use prost::Message;
 use protocol::{
     llm::*,
     worker::event::{RpcReq, RpcRes},
-    Session,
+    ChatCfg, Session,
 };
 use spin::RwLock;
 use tokio::sync::oneshot;

@@ -3,9 +3,9 @@ use models::{
     get_device,
     llama::{new_layers, LlamaLayersWorker, LlamaModel, ModelResource},
     remote::TensorBuf,
-    ChatCfg, ChatModel, ModelLayersWorker,
+    ChatModel, ModelLayersWorker,
 };
-use protocol::Session;
+use protocol::{ChatCfg, Session};
 use tokio::time::Instant;
 
 #[tokio::main]

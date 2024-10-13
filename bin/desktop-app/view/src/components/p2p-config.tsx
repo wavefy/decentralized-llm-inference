@@ -100,7 +100,7 @@ const P2pConfigWidget = ({ status }: { status?: P2PStatus }) => {
     try {
       const maxLayers = Math.floor(
         (maxMemory / MODELS[selectedModel].memory) *
-          MODELS[selectedModel].layers
+        MODELS[selectedModel].layers
       );
       const suggestedLayers = await suggestP2pLayers(
         controlBasePath,
@@ -120,7 +120,7 @@ const P2pConfigWidget = ({ status }: { status?: P2PStatus }) => {
       } else if (suggestedLayers.min_layers !== undefined) {
         const requiredMemory = Math.ceil(
           (MODELS[selectedModel].memory * suggestedLayers.min_layers) /
-            MODELS[selectedModel].layers
+          MODELS[selectedModel].layers
         );
         setWarning(
           `Need at least ${requiredMemory}GB of memory for ${suggestedLayers.min_layers} layers.`
@@ -285,13 +285,13 @@ const P2pConfigWidget = ({ status }: { status?: P2PStatus }) => {
           </p>
         )}
       </div>
-      {status?.model ? (
+      {status && status.models.length > 0 ? (
         <div>
           <div>
             <h2 className="text-lg font-semibold">Current Model</h2>
             <p className="text-sm text-gray-500">
-              {status.model.model} (Layers: {status.model.from_layer} -{" "}
-              {status.model.to_layer})
+              {status.models[0].model} (Layers: {status.models[0].from_layer} -{" "}
+              {status.models[0].to_layer})
             </p>
           </div>
           <div className="mt-4">
@@ -412,7 +412,7 @@ const P2pConfigWidget = ({ status }: { status?: P2PStatus }) => {
 
 export const P2pConfig = ({ status }: { status?: P2PStatus }) => {
   return (
-    <Dialog open={status && status.status === "stopped"}>
+    <Dialog open={status && (status.models.length === 0 || status.models[0].status === "stopped")}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>P2P Config</DialogTitle>
