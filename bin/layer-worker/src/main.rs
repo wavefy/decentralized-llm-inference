@@ -5,6 +5,7 @@ use contract::{
     OnChainService,
 };
 use models::{fake, get_device, llama, phi3, ModelLayersWorker};
+use utils::random_node_id;
 use std::{net::ToSocketAddrs, sync::Arc};
 use tokio::signal;
 use usage_service::WorkerUsageService;
@@ -24,7 +25,7 @@ struct Args {
 
     /// node id
     #[arg(env, long)]
-    node_id: String,
+    node_id: Option<String>,
 
     /// model id
     #[arg(env, long, default_value = "phi3")]
@@ -64,6 +65,7 @@ async fn main() {
     let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, args.layers_from..args.layers_to);
     onchain_service.init().await;
     let usage_service = Arc::new(onchain_service);
+    let node_id = args.node_id.unwrap_or_else(random_node_id);
 
     match args.model.as_str() {
         "phi3" => {
@@ -73,7 +75,7 @@ async fn main() {
                 device,
                 layers_worker,
                 &args.model,
-                &args.node_id,
+                &node_id,
                 args.layers_from,
                 args.layers_to,
                 &args.stun_server,
@@ -94,7 +96,7 @@ async fn main() {
                 device,
                 layers_worker,
                 &args.model,
-                &args.node_id,
+                &node_id,
                 args.layers_from,
                 args.layers_to,
                 &args.stun_server,
@@ -115,7 +117,7 @@ async fn main() {
                 device,
                 layers_worker,
                 &args.model,
-                &args.node_id,
+                &node_id,
                 args.layers_from,
                 args.layers_to,
                 &args.stun_server,
@@ -136,7 +138,7 @@ async fn main() {
                 device,
                 layers_worker,
                 &args.model,
-                &args.node_id,
+                &node_id,
                 args.layers_from,
                 args.layers_to,
                 &args.stun_server,
@@ -151,7 +153,7 @@ async fn main() {
                 device,
                 layers_worker,
                 &args.model,
-                &args.node_id,
+                &node_id,
                 args.layers_from,
                 args.layers_to,
                 &args.stun_server,
