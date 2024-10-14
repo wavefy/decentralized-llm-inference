@@ -5195,6 +5195,7 @@ dependencies = [
  "tokio",
  "tracing-subscriber 0.3.18",
  "usage-service",
+ "utils",
  "worker",
 ]
 
@@ -6734,6 +6735,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
+name = "openai-http"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "poem 3.1.0",
+ "protocol",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "openai-protocol"
 version = "0.1.0"
 
@@ -6746,6 +6759,7 @@ dependencies = [
  "contract",
  "log",
  "models",
+ "openai-http",
  "poem 3.1.0",
  "protocol",
  "registry",
@@ -7810,6 +7824,7 @@ dependencies = [
  "prost-build",
  "prost-types 0.13.1",
  "rand 0.8.5",
+ "serde",
 ]
 
 [[package]]
@@ -10137,7 +10152,9 @@ checksum = "c6989540ced10490aaf14e6bad2e3d33728a2813310a0c71d1574304c49631cd"
 dependencies = [
  "futures-util",
  "log",
+ "native-tls",
  "tokio",
+ "tokio-native-tls",
  "tungstenite",
 ]
 
@@ -10446,6 +10463,7 @@ dependencies = [
  "http 1.1.0",
  "httparse",
  "log",
+ "native-tls",
  "rand 0.8.5",
  "sha1",
  "thiserror",

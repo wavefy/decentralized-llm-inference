@@ -21,6 +21,7 @@ impl LogitsProcessor {
         Self { rng, sampling }
     }
 
+    #[allow(unused)]
     pub fn new(seed: u64, temperature: Option<f64>, top_p: Option<f64>) -> Self {
         let temperature = temperature.and_then(|v| {
             if v < 1e-7 {

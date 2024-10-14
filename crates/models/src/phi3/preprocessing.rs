@@ -29,7 +29,7 @@ impl Phi3Preprocessor {
 
 #[async_trait::async_trait]
 impl ModelPreprocessor<Tensor, (Tensor, u32)> for Phi3Preprocessor {
-    async fn start(&self, session: Session) {}
+    async fn start(&self, _session: Session) {}
 
     async fn forward(&self, _session: Session, xs: Tensor) -> Result<(Tensor, u32)> {
         let (_b_sz, seq_len) = xs.dims2()?;

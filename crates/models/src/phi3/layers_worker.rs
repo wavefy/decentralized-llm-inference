@@ -17,54 +17,59 @@ pub struct Phi3LayersWorker {
 
 impl Phi3LayersWorker {
     pub async fn new(use_flash_attn: bool, range: Range<u32>, device: &Device) -> Result<Self> {
-        let mut reader_f = std::fs::File::open(model_path().await).unwrap();
-        let ct = gguf_file::Content::read(&mut reader_f).unwrap();
-        let reader = &mut reader_f;
+        let (layers, max_seq_len) = if !range.is_empty() {
+            let mut reader_f = std::fs::File::open(model_path().await).unwrap();
+            let ct = gguf_file::Content::read(&mut reader_f).unwrap();
+            let reader = &mut reader_f;
 
-        let md_get = |s: &str| match ct.metadata.get(s) {
-            None => candle_core::bail!("cannot find {s} in metadata"),
-            Some(v) => Ok(v),
+            let md_get = |s: &str| match ct.metadata.get(s) {
+                None => candle_core::bail!("cannot find {s} in metadata"),
+                Some(v) => Ok(v),
+            };
+
+            let max_seq_len = md_get("phi3.context_length")?.to_u32()? as usize;
+            let head_count = md_get("phi3.attention.head_count")?.to_u32()? as usize;
+            let head_count_kv = md_get("phi3.attention.head_count_kv")?.to_u32()? as usize;
+            let i_size = md_get("phi3.feed_forward_length")?.to_u32()? as usize;
+            let rms_eps = md_get("phi3.attention.layer_norm_rms_epsilon")?.to_f32()? as f64;
+            let embedding_length = md_get("phi3.embedding_length")?.to_u32()? as usize;
+            let head_dim = embedding_length / head_count;
+            let rope_dim = md_get("phi3.rope.dimension_count")?.to_u32()? as usize;
+            let (cos, sin) = precomput_freqs_cis(rope_dim, max_seq_len, 10_000., device)?;
+            let neg_inf = Tensor::new(f32::NEG_INFINITY, device)?;
+
+            let mut layers = Vec::with_capacity(range.len());
+            for layer_idx in range.clone() {
+                println!("load layer {layer_idx}");
+                let prefix = format!("blk.{layer_idx}");
+                let ffn_up = QLinear::new(&ct, reader, &format!("{prefix}.ffn_up"), device).unwrap();
+                let ffn_down = QLinear::new(&ct, reader, &format!("{prefix}.ffn_down"), device).unwrap();
+                let mlp = Mlp { ffn_up, ffn_down, i_size };
+                let attn_norm = rms_norm(ct.tensor(reader, &format!("{prefix}.attn_norm.weight"), device)?, rms_eps)?;
+                let ffn_norm = rms_norm(ct.tensor(reader, &format!("{prefix}.ffn_norm.weight"), device)?, rms_eps)?;
+                let span_attn = tracing::span!(tracing::Level::TRACE, "attn");
+                let span_rot = tracing::span!(tracing::Level::TRACE, "attn-rot");
+                layers.push(LayerWeights {
+                    attn_qkv: QLinear::new(&ct, reader, &format!("{prefix}.attn_qkv"), device)?,
+                    attn_output: QLinear::new(&ct, reader, &format!("{prefix}.attn_output"), device)?,
+                    attn_norm,
+                    ffn_norm,
+                    mlp,
+                    n_head: head_count,
+                    n_kv_head: head_count_kv,
+                    head_dim,
+                    cos: cos.clone(),
+                    sin: sin.clone(),
+                    neg_inf: neg_inf.clone(),
+                    use_flash_attn,
+                    span_attn,
+                    span_rot,
+                })
+            }
+            (layers, max_seq_len)
+        } else {
+            (vec![], 0)
         };
-
-        let max_seq_len = md_get("phi3.context_length")?.to_u32()? as usize;
-        let head_count = md_get("phi3.attention.head_count")?.to_u32()? as usize;
-        let head_count_kv = md_get("phi3.attention.head_count_kv")?.to_u32()? as usize;
-        let i_size = md_get("phi3.feed_forward_length")?.to_u32()? as usize;
-        let rms_eps = md_get("phi3.attention.layer_norm_rms_epsilon")?.to_f32()? as f64;
-        let embedding_length = md_get("phi3.embedding_length")?.to_u32()? as usize;
-        let head_dim = embedding_length / head_count;
-        let rope_dim = md_get("phi3.rope.dimension_count")?.to_u32()? as usize;
-        let (cos, sin) = precomput_freqs_cis(rope_dim, max_seq_len, 10_000., device)?;
-        let neg_inf = Tensor::new(f32::NEG_INFINITY, device)?;
-
-        let mut layers = Vec::with_capacity(range.len());
-        for layer_idx in range.clone() {
-            println!("load layer {layer_idx}");
-            let prefix = format!("blk.{layer_idx}");
-            let ffn_up = QLinear::new(&ct, reader, &format!("{prefix}.ffn_up"), device).unwrap();
-            let ffn_down = QLinear::new(&ct, reader, &format!("{prefix}.ffn_down"), device).unwrap();
-            let mlp = Mlp { ffn_up, ffn_down, i_size };
-            let attn_norm = rms_norm(ct.tensor(reader, &format!("{prefix}.attn_norm.weight"), device)?, rms_eps)?;
-            let ffn_norm = rms_norm(ct.tensor(reader, &format!("{prefix}.ffn_norm.weight"), device)?, rms_eps)?;
-            let span_attn = tracing::span!(tracing::Level::TRACE, "attn");
-            let span_rot = tracing::span!(tracing::Level::TRACE, "attn-rot");
-            layers.push(LayerWeights {
-                attn_qkv: QLinear::new(&ct, reader, &format!("{prefix}.attn_qkv"), device)?,
-                attn_output: QLinear::new(&ct, reader, &format!("{prefix}.attn_output"), device)?,
-                attn_norm,
-                ffn_norm,
-                mlp,
-                n_head: head_count,
-                n_kv_head: head_count_kv,
-                head_dim,
-                cos: cos.clone(),
-                sin: sin.clone(),
-                neg_inf: neg_inf.clone(),
-                use_flash_attn,
-                span_attn,
-                span_rot,
-            })
-        }
 
         let span = tracing::span!(tracing::Level::TRACE, "layers_worker");
 

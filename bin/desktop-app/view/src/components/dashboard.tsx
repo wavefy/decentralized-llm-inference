@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React from "react";
 import { useQuery } from "@apollo/client";
 import {
   GET_CREATED_SESSION,
   GET_CLAIMED_REQUESTS,
   ownerJsonFilter,
+  GET_CLAIMER_REQUESTS,
+  claimerJsonFilter,
 } from "@/queries/indexer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -16,8 +18,10 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useP2PStatus } from "@/queries/p2p";
-import { controlBasePath } from "@/lib/utils";
+import { appMode, controlBasePath } from "@/lib/utils";
 import CopyableAddress from "./copyable-address";
+import P2pStatusDashboard from "./p2p-status-dashboard";
+import { P2pConfig } from "./p2p-config";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -28,6 +32,7 @@ interface CreatedSessionEventData {
   price_per_token: number;
   addresses: string[];
   layers: number[];
+  ts: string;
 }
 
 interface ClaimedRequestEventData {
@@ -36,11 +41,13 @@ interface ClaimedRequestEventData {
   session_id: number;
   token_count: number;
   total_reward: number;
+  ts: string;
 }
 
 const Dashboard: React.FC = () => {
-  const [createdSessionsPage, setCreatedSessionsPage] = useState(0);
-  const [claimedRequestsPage, setClaimedRequestsPage] = useState(0);
+  const [createdSessionsPage, setCreatedSessionsPage] = React.useState(0);
+  const [claimerRequestPage, setClaimerRequestsPage] = React.useState(0);
+  const [claimedRequestPage, setClaimedRequestsPage] = React.useState(0);
 
   const { status, isLoading: statusLoading } = useP2PStatus({
     baseControlUrl: controlBasePath,
@@ -51,61 +58,69 @@ const Dashboard: React.FC = () => {
       variables: {
         limit: ITEMS_PER_PAGE,
         offset: createdSessionsPage * ITEMS_PER_PAGE,
-        jsonFilter: ownerJsonFilter(status?.address!),
+        jsonFilter: ownerJsonFilter(status?.models[0]?.wallet.address!),
       },
       pollInterval: 5000,
-      skip: !status?.address,
+      skip: !status?.models[0]?.wallet.address,
     });
 
-  const { data: claimedRequestsData, loading: claimedRequestsLoading } =
+  const { data: claimerRequestData, loading: claimerRequestLoading } =
+    useQuery(GET_CLAIMER_REQUESTS, {
+      variables: {
+        limit: ITEMS_PER_PAGE,
+        offset: claimerRequestPage * ITEMS_PER_PAGE,
+        jsonFilter: ownerJsonFilter(status?.models[0]?.wallet.address!),
+      },
+      pollInterval: 5000,
+      skip: !status?.models[0]?.wallet.address,
+    });
+
+  const { data: claimedRequestData, loading: claimedRequestLoading } =
     useQuery(GET_CLAIMED_REQUESTS, {
       variables: {
         limit: ITEMS_PER_PAGE,
-        offset: claimedRequestsPage * ITEMS_PER_PAGE,
-        jsonFilter: ownerJsonFilter(status?.address!),
+        offset: claimedRequestPage * ITEMS_PER_PAGE,
+        jsonFilter: claimerJsonFilter(status?.models[0]?.wallet.address!),
       },
       pollInterval: 5000,
-      skip: !status?.address,
+      skip: !status?.models[0]?.wallet.address,
     });
-
   if (statusLoading) {
     return <div>Loading P2P status...</div>;
-  }
-
-  if (!status?.address) {
-    return <div>P2P status not ready. Please start a P2P session.</div>;
   }
 
   return (
     <div className="container mx-auto p-4 space-y-6">
       <h1 className="text-3xl font-bold">Dashboard</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Sessions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-4xl font-bold">{status.sessions}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Peers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-4xl font-bold">{status.peers}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Balance</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-4xl font-bold">{status.balance?.toFixed(2)}</p>
-          </CardContent>
-        </Card>
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-semibold">Active Models</h2>
+        {appMode === "local" && <P2pConfig status={status} />}
       </div>
+
+      {status?.models && status.models.length > 0 ? (
+        status.models.map((model, index) => (
+          <Card key={index} className="mb-6">
+            <CardHeader>
+              <CardTitle>Model: {model.model}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <P2pStatusDashboard status={model} />
+            </CardContent>
+          </Card>
+        ))
+      ) : (
+        <Card>
+          <CardContent>
+            <p className="text-center py-4">
+              No active models.{" "}
+              {appMode === "local"
+                ? "Start a new model to begin."
+                : "Wait for a model to be assigned."}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -119,6 +134,7 @@ const Dashboard: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Time</TableHead>
                     <TableHead>Owner</TableHead>
                     <TableHead>Max Tokens</TableHead>
                     <TableHead>Session ID</TableHead>
@@ -134,16 +150,35 @@ const Dashboard: React.FC = () => {
                       return (
                         <TableRow key={index}>
                           <TableCell>
+                            {new Date(+data.ts * 1000).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
                             <CopyableAddress
                               address={data.owner}
-                              isCurrentUser={data.owner === status.address}
+                              isCurrentUser={status?.models.some(
+                                (m) => m.wallet.address === data.owner
+                              )}
                             />
                           </TableCell>
                           <TableCell>{data.max_tokens}</TableCell>
                           <TableCell>{data.session_id}</TableCell>
                           <TableCell>{data.price_per_token}</TableCell>
-                          <TableCell>{data.addresses.join(", ")}</TableCell>
-                          <TableCell>{data.layers.join(", ")}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {data.addresses.map((address, idx) => (
+                                <CopyableAddress
+                                  key={idx}
+                                  address={address}
+                                  isCurrentUser={status?.models.some(
+                                    (m) => m.wallet.address === address
+                                  )}
+                                />
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {data.layers.map((l) => +l - 1).join(", ")}
+                          </TableCell>
                         </TableRow>
                       );
                     }
@@ -173,16 +208,17 @@ const Dashboard: React.FC = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Claimed Requests</CardTitle>
+          <CardTitle>Claimer</CardTitle>
         </CardHeader>
         <CardContent>
-          {claimedRequestsLoading ? (
+          {claimerRequestLoading ? (
             <p>Loading...</p>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Time</TableHead>
                     <TableHead>Claimer</TableHead>
                     <TableHead>Owner</TableHead>
                     <TableHead>Session ID</TableHead>
@@ -191,24 +227,105 @@ const Dashboard: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {claimedRequestsData?.events.map(
+                  {claimerRequestData?.events.map(
                     (event: any, index: number) => {
                       const data: ClaimedRequestEventData = event.data;
                       return (
                         <TableRow key={index}>
                           <TableCell>
+                            {new Date(+data.ts * 1000).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
                             <CopyableAddress
                               address={data.claimer}
-                              isCurrentUser={data.claimer === status.address}
+                              isCurrentUser={status?.models.some(
+                                (m) => m.wallet.address === data.claimer
+                              )}
                             />
                           </TableCell>
                           <TableCell>
                             <CopyableAddress
                               address={data.owner}
-                              isCurrentUser={data.owner === status.address}
+                              isCurrentUser={status?.models.some(
+                                (m) => m.wallet.address === data.owner
+                              )}
                             />
                           </TableCell>
+                          <TableCell>{data.session_id}</TableCell>
+                          <TableCell>{data.token_count}</TableCell>
+                          <TableCell>{data.total_reward}</TableCell>
+                        </TableRow>
+                      );
+                    }
+                  )}
+                </TableBody>
+              </Table>
+              <div className="flex justify-between mt-4">
+                <Button
+                  onClick={() =>
+                    setClaimerRequestsPage((prev) => Math.max(0, prev - 1))
+                  }
+                  disabled={claimerRequestPage === 0}
+                >
+                  Previous
+                </Button>
+                <Button
+                  onClick={() => setClaimerRequestsPage((prev) => prev + 1)}
+                  disabled={claimerRequestData?.events.length < ITEMS_PER_PAGE}
+                >
+                  Next
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Claimed Requests</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {claimedRequestLoading ? (
+            <p>Loading...</p>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Owner</TableHead>
+                    <TableHead>Claimer</TableHead>
+                    <TableHead>Session ID</TableHead>
+                    <TableHead>Token Count</TableHead>
+                    <TableHead>Total Reward</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {claimedRequestData?.events.map(
+                    (event: any, index: number) => {
+                      const data: ClaimedRequestEventData = event.data;
+                      return (
+                        <TableRow key={index}>
+                          <TableCell>
+                            {new Date(+data.ts * 1000).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            <CopyableAddress
+                              address={data.owner}
+                              isCurrentUser={status?.models.some(
+                                (m) => m.wallet.address === data.owner
+                              )}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <CopyableAddress
+                              address={data.claimer}
+                              isCurrentUser={status?.models.some(
+                                (m) => m.wallet.address === data.claimer
+                              )}
+                            />
+                          </TableCell>
                           <TableCell>{data.session_id}</TableCell>
                           <TableCell>{data.token_count}</TableCell>
                           <TableCell>{data.total_reward}</TableCell>
@@ -223,13 +340,13 @@ const Dashboard: React.FC = () => {
                   onClick={() =>
                     setClaimedRequestsPage((prev) => Math.max(0, prev - 1))
                   }
-                  disabled={claimedRequestsPage === 0}
+                  disabled={claimedRequestPage === 0}
                 >
                   Previous
                 </Button>
                 <Button
                   onClick={() => setClaimedRequestsPage((prev) => prev + 1)}
-                  disabled={claimedRequestsData?.events.length < ITEMS_PER_PAGE}
+                  disabled={claimedRequestData?.events.length < ITEMS_PER_PAGE}
                 >
                   Next
                 </Button>

@@ -28,3 +28,10 @@ profiles:
     account: 879170b4ab243b75c5a5d0ae94165c8be5c110c77d23b5d19a9d542018b31a45
     rest_url: "https://fullnode.testnet.aptoslabs.com"
     faucet_url: "https://faucet.testnet.aptoslabs.com"
+  llm-layer-worker-test-2:
+    network: Testnet
+    private_key: "0x334a1d892a12b1edf572cb96408c3f377b2a6763b8cc447760f41b280ecfd977"
+    public_key: "0x31dc7b42a967f7d551a15f1c5eab45698a76223df512821378f25c54d454c154"
+    account: 2c3237b54ec12c32141ac53d7076f70941f9d727297738975e28005e411004cb
+    rest_url: "https://fullnode.testnet.aptoslabs.com"
+    faucet_url: "https://faucet.testnet.aptoslabs.com"

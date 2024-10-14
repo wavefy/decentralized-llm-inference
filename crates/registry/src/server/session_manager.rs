@@ -1,9 +1,13 @@
 use std::{
-    collections::{HashMap, VecDeque}, hash::Hash, ops::Range
+    collections::{HashMap, VecDeque},
+    ops::Range,
 };
 
 use p2p_network::addr::NodeId;
-use protocol::registry::to_worker::{NeighboursReply, UpdateReply};
+use protocol::registry::{
+    to_registry::Stats,
+    to_worker::{NeighboursReply, UpdateReply},
+};
 use serde::Serialize;
 
 use crate::ModelDistribution;
@@ -11,6 +15,7 @@ use crate::ModelDistribution;
 #[derive(Default, Debug, Serialize, Clone)]
 pub struct NodeInfo {
     layers: Option<Range<u32>>,
+    stats: Stats,
 }
 
 #[derive(Default, Debug)]
@@ -78,6 +83,10 @@ impl SessionManager {
                         protocol::registry::to_worker::Event::Relay(protocol::registry::to_worker::Relay { source: node.0, data: data.data }),
                     ))
                 }
+            }
+            protocol::registry::to_registry::Event::Stats(stats) => {
+                let node_info = self.nodes.get_mut(&node).expect("Should have node");
+                node_info.stats = stats;
             }
         }
     }

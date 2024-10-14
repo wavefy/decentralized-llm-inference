@@ -17,11 +17,10 @@ const EOS_TOKEN: &str = "</s>";
 const USE_KV_CACHE: bool = true;
 
 use crate::{
-    http_api::ChatCompletionRequest,
     logits_processor::{LogitsProcessor, Sampling},
     token_output_stream::TokenOutputStream,
     utils::{apply_repeat_penalty, hub_load_safetensors},
-    ChatCfg, ChatModel, ModelLayersWorker,
+    ChatCfg, ChatCompletionRequest, ChatModel, ModelLayersWorker,
 };
 
 async fn tokenizer_path(repo: &str, filename: &str) -> PathBuf {

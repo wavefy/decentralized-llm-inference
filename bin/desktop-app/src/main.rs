@@ -2,20 +2,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use clap::Parser;
+use openai_server::{start_http_server, ContributorMode, ServerMode};
 use std::env;
 use utils::random_node_id;
 
 use core::net::SocketAddr;
-use openai_server::start_control_server;
 use tauri::generate_context;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// status bind addr
-    #[arg(env, long, default_value = "127.0.0.1:28888")]
-    control_bind: SocketAddr,
-
     /// http bind addr
     #[arg(env, long, default_value = "127.0.0.1:18888")]
     http_bind: SocketAddr,
@@ -25,7 +21,7 @@ struct Args {
     stun_server: String,
 
     /// registry server
-    #[arg(env, long, default_value = "ws://127.0.0.1:3000/ws")]
+    #[arg(env, long, default_value = "wss://registry.llm.wavefy.network/ws")]
     registry_server: String,
 
     /// node id
@@ -49,7 +45,7 @@ async fn main() {
             // let window = app.get_window("main").unwrap();
             // window.open_devtools();
             tauri::async_runtime::spawn(async move {
-                start_control_server(args.control_bind, &args.registry_server, &node_id, args.http_bind, &args.stun_server).await;
+                start_http_server(args.http_bind, &args.registry_server, &node_id, &args.stun_server, ServerMode::Contributor(ContributorMode {})).await;
             });
             Ok(())
         })

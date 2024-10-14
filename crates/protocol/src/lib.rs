@@ -1,6 +1,12 @@
+use model_router::{LayerRemoteInfo, RouteSync};
 use std::fmt::Display;
 use std::ops::Deref;
-use model_router::{LayerRemoteInfo, RouteSync};
+
+mod model;
+mod openai;
+
+pub use model::*;
+pub use openai::*;
 
 pub mod registry {
     include!(concat!(env!("OUT_DIR"), "/registry.rs"));

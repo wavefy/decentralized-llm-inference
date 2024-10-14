@@ -39,7 +39,7 @@ pub struct ChatCompletionRequest {
     pub plain_text: Option<bool>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct Model {
     pub id: String,
     pub object: String,

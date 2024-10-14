@@ -27,6 +27,15 @@ import { Sidebar } from "../sidebar";
 import { ChatOptions } from "./chat-options";
 import { Button } from "../ui/button";
 import { stopP2pSession } from "@/api/p2p";
+import { useP2PStatus } from "@/queries/p2p";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import ChatModelStatus from "./chat-model-status";
 
 interface ChatTopbarProps {
   chatOptions: ChatOptions;
@@ -49,35 +58,17 @@ export default function ChatTopbar({
 
   const currentModel = chatOptions && chatOptions.selectedModel;
   const [tokenLimit, setTokenLimit] = React.useState<number>(4096);
+  const { status } = useP2PStatus({baseControlUrl: controlBasePath});
   const [error, setError] = React.useState<string | undefined>(undefined);
 
   const fetchData = async () => {
-    if (!hasMounted) {
-      return null;
-    }
-    try {
-      const res = await fetch(basePath + "/api/models");
-
-      if (!res.ok) {
-        const errorResponse = await res.json();
-        const errorMessage = `Connection to vLLM server failed: ${errorResponse.error} [${res.status} ${res.statusText}]`;
-        throw new Error(errorMessage);
-      }
-
-      const data = await res.json();
-      // Extract the "name" field from each model object and store them in the state
-      const modelNames = data.data.map((model: any) => model.id);
-      // save the first and only model in the list as selectedModel in localstorage
-      setChatOptions({ ...chatOptions, selectedModel: modelNames[0] });
-    } catch (error) {
-      setChatOptions({ ...chatOptions, selectedModel: undefined });
-      toast.error(error as string);
+    if (status) {
+      setChatOptions({ ...chatOptions, selectedModel: status?.models[0]?.model });
     }
   };
 
   useEffect(() => {
-    // fetchData();
-    // getTokenLimit(basePath).then((limit) => setTokenLimit(limit));
+    fetchData();
   }, [hasMounted]);
 
   if (!hasMounted) {
@@ -113,9 +104,10 @@ export default function ChatTopbar({
         </SheetContent>
       </Sheet>
 
-      <div className="flex justify-center md:justify-between gap-4 w-full">
+      <div className="flex justify-between items-center gap-4 w-full">
+        {/* Left side */}
         <div className="gap-1 flex items-center">
-          {currentModel !== undefined && (
+          {currentModel !== undefined && status && status.models && status.models.length > 0 ? (
             <>
               {isLoading ? (
                 <DotFilledIcon className="w-4 h-4 text-blue-500" />
@@ -143,15 +135,61 @@ export default function ChatTopbar({
                 {isLoading ? "Generating.." : "Ready"}
               </span>
             </>
-          )}
-          {currentModel === undefined && (
+          ) : (
             <>
-              <CrossCircledIcon className="w-4 h-4 text-red-500" />
-              <span className="text-xs">Connection to vLLM server failed</span>
+              <CrossCircledIcon className="w-4 h-4 text-yellow-500" />
+              <span className="text-xs">Waiting for an active model...</span>
             </>
           )}
         </div>
-        <div className="flex items-end gap-2">
+
+        {/* Center - Model Selection and Status */}
+        <div className="flex items-center gap-2">
+          {status && status.models && status.models.length > 0 && (
+            <Select
+              value={chatOptions.selectedModel}
+              onValueChange={(value) => setChatOptions({ ...chatOptions, selectedModel: value })}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                {status.models.map((model) => (
+                  <SelectItem key={model.model} value={model.model}>
+                    <div className="flex items-center gap-2">
+                      <span>{model.model}</span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <span className="cursor-help">
+                              {model.status === 'ready' ? (
+                                <CheckCircledIcon className="w-4 h-4 text-green-500" />
+                              ) : (
+                                <DotFilledIcon className="w-4 h-4 text-yellow-500 animate-pulse" />
+                              )}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            sideOffset={4}
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-2 rounded-sm text-xs"
+                          >
+                            <p className="font-bold">{model.model}</p>
+                            <p className="text-gray-500">
+                              {model.status === 'ready' ? 'Ready' : 'Incomplete...'}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* Right side */}
+        <div className="flex gap-2 items-center">
           {chatTokens > tokenLimit && (
             <TooltipProvider>
               <Tooltip>
@@ -162,7 +200,7 @@ export default function ChatTopbar({
                 </TooltipTrigger>
                 <TooltipContent
                   sideOffset={4}
-                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-sm text-xs"
+                  className="z-60 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-sm text-xs"
                 >
                   <p className="text-gray-500">
                     Token limit exceeded. Truncating middle messages.
@@ -176,6 +214,7 @@ export default function ChatTopbar({
               {chatTokens} / {tokenLimit} token{chatTokens > 1 ? "s" : ""}
             </span>
           )}
+          <ChatModelStatus />
         </div>
       </div>
     </div>

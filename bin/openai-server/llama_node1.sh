@@ -1,1 +1,1 @@
-cargo run --release --features metal -- --node-id node1 --layers-from 0 --layers-to 10 --model llama32-1b
+cargo run --release --features metal -- --node-id node1 --layers-from 0 --layers-to 10 --model llama32-1b --private-key 0x69d91353993001d80ef74f7a27fcb15456d4d6298c755a5316a0a0d87b6b39b9

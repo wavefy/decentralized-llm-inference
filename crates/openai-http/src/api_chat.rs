@@ -1,14 +1,9 @@
 use std::{
     io,
     pin::Pin,
-    sync::Arc,
     task::{Context, Poll},
 };
 
-use models::{
-    http_api::{ChatCompletionRequest, Model, ModelList},
-    ChatCfg, ChatModel,
-};
 use poem::{
     handler,
     http::StatusCode,
@@ -16,13 +11,14 @@ use poem::{
     Body, Error, IntoResponse, Response,
 };
 use protocol::Session;
+use protocol::{ChatCfg, ChatCompletionRequest, ModelList};
 use serde_json::json;
 use tokio::{
     io::AsyncRead,
     sync::mpsc::{channel, Receiver, Sender},
 };
 
-const MODELS: [&str; 1] = ["local-model"];
+use crate::ModelStore;
 
 struct AsyncReadRx {
     rx: Receiver<String>,
@@ -83,36 +79,26 @@ impl AsyncRead for AsyncReadRx {
     }
 }
 
-#[handler]
-pub async fn list_models() -> Response {
-    let models = MODELS
-        .iter()
-        .map(|&id| Model {
-            id: id.to_string(),
-            object: "model".to_string(),
-            created: 1684275908, // using a fixed date for simplicity
-            owned_by: "_".to_string(),
-        })
-        .collect();
+pub struct ChatStartRequest {
+    pub session: Session,
+    pub cfg: ChatCfg,
+    pub req: ChatCompletionRequest,
+    pub answer_tx: Sender<String>,
+}
 
+#[handler]
+pub async fn list_models(data: Data<&ModelStore>) -> Response {
     let model_list = ModelList {
         object: "list".to_string(),
-        data: models,
+        data: data.models(),
     };
 
     Response::builder().header("Content-Type", "application/json").body(Body::from_json(&model_list).unwrap())
 }
 
 #[handler]
-pub async fn get_model(Path(model_id): Path<String>) -> Result<Response, Error> {
-    if let Some(&id) = MODELS.iter().find(|&&m| m == model_id) {
-        let model = Model {
-            id: id.to_string(),
-            object: "model".to_string(),
-            created: 1684275908, // using a fixed date for simplicity
-            owned_by: "_".to_string(),
-        };
-
+pub async fn get_model(Path(model_id): Path<String>, data: Data<&ModelStore>) -> Result<Response, Error> {
+    if let Some(model) = data.model(&model_id) {
         Ok(Response::builder().header("Content-Type", "application/json").body(Body::from_json(&model).unwrap()))
     } else {
         Err(Error::from_string("Model not found", StatusCode::NOT_FOUND))
@@ -120,7 +106,7 @@ pub async fn get_model(Path(model_id): Path<String>) -> Result<Response, Error> 
 }
 
 #[handler]
-pub async fn chat_completions(Json(req): Json<ChatCompletionRequest>, data: Data<&Arc<dyn ChatModel>>) -> impl IntoResponse {
+pub async fn chat_completions(Json(req): Json<ChatCompletionRequest>, data: Data<&Sender<ChatStartRequest>>) -> impl IntoResponse {
     let mut cfg = ChatCfg::default();
     if let Some(temperature) = req.temperature {
         cfg.temperature = temperature as f64;
@@ -130,18 +116,17 @@ pub async fn chat_completions(Json(req): Json<ChatCompletionRequest>, data: Data
     }
     let stream = req.stream.unwrap_or(false);
 
-    let prompt = data.build_prompt(&req);
-    log::info!("prompt: {}", prompt);
-
     if stream {
+        let session = Session::new();
+        let (tx, mut rx) = channel(1);
         let (stream, stream_tx) = AsyncReadRx::new();
-        let model_exe = data.0.clone();
+        let plain_text = req.plain_text;
+        if let Err(e) = data.0.send(ChatStartRequest { session, cfg, req, answer_tx: tx }).await {
+            return Response::builder().status(StatusCode::SERVICE_UNAVAILABLE).body(format!("{e:?}"));
+        }
         tokio::spawn(async move {
-            let session = Session::new();
-            let (tx, mut rx) = channel(1);
-            tokio::spawn(async move { model_exe.chat(session, cfg, &prompt, tx).await });
             while let Some(out) = rx.recv().await {
-                let response = match req.plain_text {
+                let response = match plain_text {
                     Some(false) | None => json!({
                         "choices": [
                             {
@@ -168,6 +153,6 @@ pub async fn chat_completions(Json(req): Json<ChatCompletionRequest>, data: Data
             .header("Connection", "keep-alive")
             .body(body)
     } else {
-        todo!()
+        Response::builder().status(StatusCode::BAD_REQUEST).body("Only support stream")
     }
 }

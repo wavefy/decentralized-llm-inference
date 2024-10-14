@@ -29,7 +29,7 @@ impl Phi3Postprocessor {
 
 #[async_trait::async_trait]
 impl ModelPostprocessor<(Tensor, u32), Tensor> for Phi3Postprocessor {
-    async fn start(&self, session: Session) {}
+    async fn start(&self, _session: Session) {}
 
     async fn forward(&self, _session: Session, (xs, seq_len): (Tensor, u32)) -> Result<Tensor> {
         let xs = xs.apply(&self.output_norm)?.i((.., seq_len as usize - 1, ..))?;

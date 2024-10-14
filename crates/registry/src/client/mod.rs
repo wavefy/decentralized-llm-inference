@@ -4,7 +4,7 @@ use p2p_network::{addr::NodeId, node::ConnId};
 use protobuf_stream::ProtobufStream;
 use protocol::registry::{
     relay_data,
-    to_registry::{self, UpdateRequest},
+    to_registry::{self, Stats, UpdateRequest},
     RelayData, ToRegistry, ToWorker,
 };
 use tokio_tungstenite::connect_async;
@@ -39,6 +39,12 @@ impl RegistryClient {
             stream: ProtobufStream::new(ws_stream),
             queue: VecDeque::new(),
         }
+    }
+
+    pub fn update_stats(&mut self, stats: Stats) {
+        self.queue.push_back(ToRegistry {
+            event: Some(to_registry::Event::Stats(stats)),
+        });
     }
 
     pub fn update_layer(&mut self, layers_range: Range<u32>) {

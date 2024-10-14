@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use candle_core::{Device, Result, Tensor};
-use models::{remote::TensorBuf, ChatCfg, ModelLayersWorker};
+use models::{remote::TensorBuf, ModelLayersWorker};
 use protocol::{
     llm::{EndReq, ForwardReq, StartReq},
-    Session,
+    ChatCfg, Session,
 };
 
 use crate::model_service::ModelService;
@@ -26,7 +26,6 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
                 metadata: vec![],
                 chain_index: 0,
                 max_tokens: config.max_len,
-
             })
             .await;
         if res.success {

@@ -7,7 +7,7 @@ use candle_core::{Device, Result, Shape, Tensor};
 use protocol::Session;
 use tokio::sync::mpsc::Sender;
 
-use crate::{http_api::ChatCompletionRequest, ChatCfg, ChatModel, ModelLayersWorker};
+use crate::{ChatCfg, ChatCompletionRequest, ChatModel, ModelLayersWorker};
 
 pub struct FakeModel<W: ModelLayersWorker<(Tensor, u32)>> {
     device: Device,
@@ -27,7 +27,7 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
     }
 
     async fn chat(&self, session: Session, cfg: ChatCfg, _prompt: &str, tx: Sender<String>) -> Result<()> {
-        self.layers_worker.start(session, cfg.clone()).await;
+        self.layers_worker.start(session, cfg.clone()).await?;
         let start_gen = Instant::now();
         for index in 0..cfg.max_len {
             let tensor = Tensor::from_vec(vec![index], Shape::from_dims(&[1]), &self.device).unwrap();
@@ -42,6 +42,7 @@ impl<W: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static> ChatModel for 
 }
 
 pub struct FakeLayersWorker {
+    #[allow(unused)]
     range: Range<u32>,
 }
 
@@ -53,14 +54,14 @@ impl FakeLayersWorker {
 
 #[async_trait::async_trait]
 impl ModelLayersWorker<(Tensor, u32)> for FakeLayersWorker {
-    async fn start(&self, session: Session, _cfg: ChatCfg) -> Result<()> {
+    async fn start(&self, _session: Session, _cfg: ChatCfg) -> Result<()> {
         Ok(())
     }
 
-    async fn forward(&self, session: Session, _step: u32, xs: (Tensor, u32), index_pos: u32) -> Result<(Tensor, u32)> {
+    async fn forward(&self, _session: Session, _step: u32, xs: (Tensor, u32), _index_pos: u32) -> Result<(Tensor, u32)> {
         tokio::time::sleep(Duration::from_millis(500)).await;
         Ok(xs)
     }
 
-    async fn finish(&self, session: Session) {}
+    async fn finish(&self, _session: Session) {}
 }

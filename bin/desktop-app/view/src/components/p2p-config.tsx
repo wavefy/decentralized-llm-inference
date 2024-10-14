@@ -1,14 +1,7 @@
 import { P2PStatus } from "@/lib/p2p";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
 import { useState, useEffect } from "react";
 import { startP2pSession, stopP2pSession, suggestP2pLayers } from "@/api/p2p";
-import { controlBasePath, shortenAddress } from "@/lib/utils";
+import { appMode, controlBasePath, shortenAddress } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
@@ -20,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { ReloadIcon, CopyIcon, ExternalLinkIcon } from "@radix-ui/react-icons";
+import { ReloadIcon, CopyIcon } from "@radix-ui/react-icons";
 import useLocalStorageState from "use-local-storage-state";
 import { toast } from "sonner";
 import {
@@ -36,6 +29,14 @@ import {
   TooltipTrigger,
 } from "./ui/tooltip";
 import { Separator } from "./ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "./ui/dialog";
 
 const MODELS: any = {
   "llama32-1b": {
@@ -60,7 +61,11 @@ const MAX_MEMORY_OPTIONS = [
   1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 24, 32, 48, 64,
 ];
 
-const P2pConfigWidget = ({ status }: { status?: P2PStatus }) => {
+interface P2pConfigProps {
+  status?: P2PStatus;
+}
+
+const P2pConfigWidget = ({ status }: P2pConfigProps) => {
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [maxMemory, setMaxMemory] = useState<number>(8);
   const [warning, setWarning] = useState<string | null>(null);
@@ -72,14 +77,37 @@ const P2pConfigWidget = ({ status }: { status?: P2PStatus }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [isGeneratingAccount, setIsGeneratingAccount] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [prevModelCount, setPrevModelCount] = useState(0);
 
   useEffect(() => {
-    const storedAddress = getStoredAccountAddress();
-    setAccountAddress(storedAddress);
-    if (storedAddress) {
-      updateAccountBalance(storedAddress);
+    if (!privateKey) {
+      return;
+    }
+    try {
+      const storedAddress = getStoredAccountAddress();
+      setAccountAddress(storedAddress);
+      if (storedAddress) {
+        updateAccountBalance(storedAddress);
+      }
+    } catch (error) {
+      console.error("Failed to fetch account balance:", error);
+      setError("Failed to fetch account balance");
+      setAccountBalance(null);
     }
   }, [privateKey]);
+
+  useEffect(() => {
+    if (status && status.models) {
+      const currentModelCount = status.models.length;
+      if (currentModelCount > prevModelCount) {
+        // A new model has been added
+        setLoading(false);
+        setIsDialogOpen(false);
+      }
+      setPrevModelCount(currentModelCount);
+    }
+  }, [status, prevModelCount]);
 
   const updateAccountBalance = async (address: string) => {
     try {
@@ -148,23 +176,12 @@ const P2pConfigWidget = ({ status }: { status?: P2PStatus }) => {
         to_layer: endLayer,
         private_key: privateKey,
       });
+      // Don't close the dialog here, it will be closed by the effect when status updates
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "An unknown error occurred"
       );
       setLoading(false);
-    }
-  };
-
-  const handleStop = async () => {
-    try {
-      setError(null);
-      await stopP2pSession(controlBasePath);
-      setPrivateKey("");
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "An unknown error occurred"
-      );
     }
   };
 
@@ -192,236 +209,201 @@ const P2pConfigWidget = ({ status }: { status?: P2PStatus }) => {
     });
   };
 
-  const renderFaucetNotice = () => {
-    if (!accountAddress || (accountBalance && parseFloat(accountBalance) > 0)) {
-      return null;
-    }
-
-    return (
-      <Alert className="mt-4">
-        <AlertTitle>Fund Your Account</AlertTitle>
-        <AlertDescription>
-          Your account needs funds to start a P2P session. Please use the Aptos
-          faucet to transfer some APT to your account.
-          <div className="mt-2">
-            <Button variant="outline" size="sm" asChild>
-              <a
-                href="https://aptoslabs.com/testnet-faucet"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center"
-              >
-                Go to Aptos Faucet
-                <ExternalLinkIcon className="ml-2 h-4 w-4" />
-              </a>
-            </Button>
-          </div>
-        </AlertDescription>
-      </Alert>
-    );
-  };
-
   return (
-    <div className="space-y-6">
-      {error && (
-        <Alert variant="destructive">
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-      <div className="space-y-2 text-center">
-        <Button
-          onClick={handleGenerateAccount}
-          className="w-full"
-          disabled={isGeneratingAccount}
-        >
-          {isGeneratingAccount ? (
-            <>
-              <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-              Generating Account...
-            </>
-          ) : (
-            "Generate New Account"
-          )}
-        </Button>
-        <p className="text-xs text-left text-yellow-500">Generating a new Aptos Account and fund it with 1 APT from testnet faucet. Remember to save the generated privatekey somewhere available to you just incase.</p>
-        <Separator className="my-6" />
-        <Label htmlFor="privateKey" className="text-center">Or</Label>
-        <Input
-          id="privateKey"
-          type="text"
-          value={privateKey}
-          onChange={(e) => setPrivateKey(e.target.value)}
-          placeholder="Enter your private key"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="account">Account</Label>
-        {accountAddress ? (
-          <div className="flex items-center justify-between">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className="cursor-pointer flex items-center gap-1"
-                    onClick={() => copyToClipboard(accountAddress)}
-                  >
-                    {shortenAddress(accountAddress)}
-                    <CopyIcon className="w-3 h-3" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{accountAddress}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {accountBalance && (
-              <span className="text-sm">Balance: {accountBalance} APT</span>
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-gray-500">
-            No account associated with this private key
-          </p>
-        )}
-      </div>
-      {status?.model ? (
-        <div>
-          <div>
-            <h2 className="text-lg font-semibold">Current Model</h2>
-            <p className="text-sm text-gray-500">
-              {status.model.model} (Layers: {status.model.from_layer} -{" "}
-              {status.model.to_layer})
-            </p>
-          </div>
-          <div className="mt-4">
-            <Button
-              onClick={handleStop}
-              variant="destructive"
-              className="w-full"
-            >
-              Stop Model
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <div>
-          <div className="space-y-4 mt-4">
-            <div className="flex space-x-4 items-end">
-              <div className="flex-grow">
-                <Select onValueChange={(value) => setSelectedModel(value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.keys(MODELS).map((model) => (
-                      <SelectItem key={model} value={model}>
-                        {model}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="w-1/4">
-                <Select onValueChange={(value) => setMaxMemory(Number(value))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Max Memory" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MAX_MEMORY_OPTIONS.map((mem) => (
-                      <SelectItem key={mem} value={mem.toString()}>
-                        {mem}GB
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={handleSuggest} variant="outline">
-                Calculate Suggests
-              </Button>
-            </div>
-            {warning && <Alert variant="destructive">{warning}</Alert>}
-            {selectedModel && (
-              <div className="space-y-4">
-                <p>
-                  This model has{" "}
-                  <span className="font-semibold">
-                    {MODELS[selectedModel].layers}
-                  </span>{" "}
-                  layers and needs{" "}
-                  <span className="font-semibold">
-                    {MODELS[selectedModel].memory} GB
-                  </span>{" "}
-                  of memory.
-                </p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="startLayer">Start Layer</Label>
-                    <Input
-                      id="startLayer"
-                      type="number"
-                      value={startLayer}
-                      onChange={(e) => setStartLayer(Number(e.target.value))}
-                      min={0}
-                      max={MODELS[selectedModel].layers - 1}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="endLayer">End Layer</Label>
-                    <Input
-                      id="endLayer"
-                      type="number"
-                      value={endLayer}
-                      onChange={(e) => setEndLayer(Number(e.target.value))}
-                      min={startLayer + 1}
-                      max={MODELS[selectedModel].layers}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="mt-4">
-            <Button
-              onClick={handleStart}
-              disabled={
-                !selectedModel ||
-                startLayer >= endLayer ||
-                loading ||
-                !privateKey ||
-                !accountBalance ||
-                parseFloat(accountBalance) === 0
-              }
-              className="w-full"
-            >
-              {loading ? (
-                <>
-                  <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-                  Please wait{" "}
-                </>
-              ) : (
-                "Start Model"
-              )}
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export const P2pConfig = ({ status }: { status?: P2PStatus }) => {
-  return (
-    <Dialog open={status && status.status === "stopped"}>
+    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <DialogTrigger asChild>
+        <Button>Start New Model</Button>
+      </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>P2P Config</DialogTitle>
+          <DialogTitle>Start New Model</DialogTitle>
           <DialogDescription>
-            Your P2P session has not been started. Please start a session.
+            Configure and start a new model for P2P processing.
           </DialogDescription>
         </DialogHeader>
-        <P2pConfigWidget status={status} />
+        <div className="space-y-6 mt-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {appMode === "local" && (
+            <>
+              <div className="space-y-2 text-center">
+                <Button
+                  onClick={handleGenerateAccount}
+                  className="w-full"
+                  disabled={isGeneratingAccount}
+                >
+                  {isGeneratingAccount ? (
+                    <>
+                      <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+                      Generating Account...
+                    </>
+                  ) : (
+                    "Generate New Account"
+                  )}
+                </Button>
+                <p className="text-xs text-left text-yellow-500">
+                  Generating a new Aptos Account and fund it with 1 APT from
+                  testnet faucet. Remember to save the generated privatekey
+                  somewhere available to you just in case.
+                </p>
+                <Separator className="my-6" />
+                <Label htmlFor="privateKey" className="text-center">
+                  Or
+                </Label>
+                <Input
+                  id="privateKey"
+                  type="text"
+                  value={privateKey}
+                  onChange={(e) => setPrivateKey(e.target.value)}
+                  placeholder="Enter your private key"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="account">Account</Label>
+                {accountAddress ? (
+                  <div className="flex items-center justify-between">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span
+                            className="cursor-pointer flex items-center gap-1"
+                            onClick={() => copyToClipboard(accountAddress)}
+                          >
+                            {shortenAddress(accountAddress)}
+                            <CopyIcon className="w-3 h-3" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{accountAddress}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    {accountBalance && (
+                      <span className="text-sm">
+                        Balance: {accountBalance} APT
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    No account associated with this private key
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+          <div>
+            <div className="space-y-4 mt-4">
+              <div className="flex space-x-4 items-end">
+                <div className="flex-grow">
+                  <Select onValueChange={(value) => setSelectedModel(value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.keys(MODELS).map((model) => (
+                        <SelectItem key={model} value={model}>
+                          {model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-1/4">
+                  <Select
+                    onValueChange={(value) => setMaxMemory(Number(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Max Memory" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MAX_MEMORY_OPTIONS.map((mem) => (
+                        <SelectItem key={mem} value={mem.toString()}>
+                          {mem}GB
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={handleSuggest} variant="outline">
+                  Calculate Suggests
+                </Button>
+              </div>
+              {warning && <Alert variant="destructive">{warning}</Alert>}
+              {selectedModel && (
+                <div className="space-y-4">
+                  <p>
+                    This model has{" "}
+                    <span className="font-semibold">
+                      {MODELS[selectedModel].layers}
+                    </span>{" "}
+                    layers and needs{" "}
+                    <span className="font-semibold">
+                      {MODELS[selectedModel].memory} GB
+                    </span>{" "}
+                    of memory.
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="startLayer">Start Layer</Label>
+                      <Input
+                        id="startLayer"
+                        type="number"
+                        value={startLayer}
+                        onChange={(e) => setStartLayer(Number(e.target.value))}
+                        min={0}
+                        max={MODELS[selectedModel].layers - 1}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="endLayer">End Layer</Label>
+                      <Input
+                        id="endLayer"
+                        type="number"
+                        value={endLayer}
+                        onChange={(e) => setEndLayer(Number(e.target.value))}
+                        min={startLayer}
+                        max={MODELS[selectedModel].layers}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="mt-4">
+              <Button
+                onClick={handleStart}
+                disabled={
+                  !selectedModel ||
+                  startLayer > endLayer ||
+                  loading ||
+                  !privateKey ||
+                  !accountBalance ||
+                  parseFloat(accountBalance) === 0
+                }
+                className="w-full"
+              >
+                {loading ? (
+                  <>
+                    <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+                    Please wait{" "}
+                  </>
+                ) : (
+                  "Start Model"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
+};
+
+export const P2pConfig = ({ status }: P2pConfigProps) => {
+  return <P2pConfigWidget status={status} />;
 };

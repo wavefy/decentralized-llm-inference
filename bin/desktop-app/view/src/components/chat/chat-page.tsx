@@ -39,22 +39,12 @@ export default function ChatPage({ chatId, setChatId }: ChatPageProps) {
     "chatOptions",
     {
       defaultValue: {
-        selectedModel: "local-model",
-        systemPrompt: "",
+        selectedModel: "llama32-1b",
+        systemPrompt: "You are a helpful assistant.",
         temperature: 0.9,
       },
     }
   );
-  const { status } = useP2PStatus({ baseControlUrl: controlBasePath });
-
-  useEffect(() => {
-    if (status?.model) {
-      setChatOptions({
-        ...chatOptions,
-        selectedModel: status.model.model,
-      });
-    }
-  }, [status]);
 
   React.useEffect(() => {
     if (chatId) {
@@ -80,6 +70,14 @@ export default function ChatPage({ chatId, setChatId }: ChatPageProps) {
     e.preventDefault();
 
     if (messages.length === 0) {
+      // push system prompt
+      if (chatOptions.systemPrompt) {
+        messages.push({
+          id: uuidv4(),
+          content: chatOptions.systemPrompt,
+          role: "system"
+        })
+      }
       // Generate a random id for the chat
       const id = uuidv4();
       setChatId(id);
@@ -107,7 +105,6 @@ export default function ChatPage({ chatId, setChatId }: ChatPageProps) {
 
   return (
     <main className="flex h-full flex-col items-center ">
-      <P2pConfig status={status} />
       <ChatLayout
         chatId={chatId}
         setChatId={setChatId}

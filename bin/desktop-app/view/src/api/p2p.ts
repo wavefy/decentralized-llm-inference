@@ -1,7 +1,7 @@
 import { P2PStartRequest } from "@/lib/p2p";
 
 export const fetchP2pStatus = async (baseControlUrl: string) => {
-  const res = await fetch(`${baseControlUrl}/v1/p2p/status`);
+  const res = await fetch(`${baseControlUrl}/p2p/v1/status`);
 
   if (!res.ok) {
     const errorResponse = await res.json();
@@ -17,7 +17,7 @@ export const startP2pSession = async (
   baseControlUrl: string,
   req: P2PStartRequest
 ) => {
-  const response = await fetch(baseControlUrl + "/v1/p2p/start", {
+  const response = await fetch(baseControlUrl + "/p2p/v1/start", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -27,9 +27,13 @@ export const startP2pSession = async (
   return response.json();
 };
 
-export const stopP2pSession = async (baseControlUrl: string) => {
-  const response = await fetch(baseControlUrl + "/v1/p2p/stop", {
+export const stopP2pSession = async (baseControlUrl: string, model: string) => {
+  const response = await fetch(baseControlUrl + "/p2p/v1/stop", {
     method: "POST",
+    body: JSON.stringify({ model }),
+    headers: {
+      "Content-Type": "application/json",
+    },
   });
   return response.json();
 };
@@ -42,7 +46,7 @@ export const suggestP2pLayers = async (
 ) => {
   const response = await fetch(
     baseControlUrl +
-      `/v1/p2p/suggest_layers?model=${model}&layers=${layers}&max_layers=${maxLayers}`
+    `/p2p/v1/suggest_layers?model=${model}&layers=${layers}&max_layers=${maxLayers}`
   );
   return response.json();
 };

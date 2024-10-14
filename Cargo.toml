@@ -14,7 +14,8 @@ members = [
     "crates/worker",
     "crates/contract",
     "crates/usage-service",
-    "crates/utils"
+    "crates/utils",
+    "crates/openai-http",
 ]
 
 [workspace.dependencies]
