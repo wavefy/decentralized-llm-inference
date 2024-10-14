@@ -150,7 +150,19 @@ const Dashboard: React.FC = () => {
                           <TableCell>{data.max_tokens}</TableCell>
                           <TableCell>{data.session_id}</TableCell>
                           <TableCell>{data.price_per_token}</TableCell>
-                          <TableCell>{data.addresses.join(", ")}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {data.addresses.map((address, idx) => (
+                                <CopyableAddress
+                                  key={idx}
+                                  address={address}
+                                  isCurrentUser={status?.models.some(
+                                    (m) => m.wallet.address === address
+                                  )}
+                                />
+                              ))}
+                            </div>
+                          </TableCell>
                           <TableCell>{data.layers.join(", ")}</TableCell>
                         </TableRow>
                       );
