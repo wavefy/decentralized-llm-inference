@@ -81,10 +81,19 @@ const P2pConfigWidget = ({ status }: P2pConfigProps) => {
   const [prevModelCount, setPrevModelCount] = useState(0);
 
   useEffect(() => {
-    const storedAddress = getStoredAccountAddress();
-    setAccountAddress(storedAddress);
-    if (storedAddress) {
-      updateAccountBalance(storedAddress);
+    if (!privateKey) {
+      return;
+    }
+    try {
+      const storedAddress = getStoredAccountAddress();
+      setAccountAddress(storedAddress);
+      if (storedAddress) {
+        updateAccountBalance(storedAddress);
+      }
+    } catch (error) {
+      console.error("Failed to fetch account balance:", error);
+      setError("Failed to fetch account balance");
+      setAccountBalance(null);
     }
   }, [privateKey]);
 
@@ -119,7 +128,7 @@ const P2pConfigWidget = ({ status }: P2pConfigProps) => {
     try {
       const maxLayers = Math.floor(
         (maxMemory / MODELS[selectedModel].memory) *
-        MODELS[selectedModel].layers
+          MODELS[selectedModel].layers
       );
       const suggestedLayers = await suggestP2pLayers(
         controlBasePath,
@@ -139,7 +148,7 @@ const P2pConfigWidget = ({ status }: P2pConfigProps) => {
       } else if (suggestedLayers.min_layers !== undefined) {
         const requiredMemory = Math.ceil(
           (MODELS[selectedModel].memory * suggestedLayers.min_layers) /
-          MODELS[selectedModel].layers
+            MODELS[selectedModel].layers
         );
         setWarning(
           `Need at least ${requiredMemory}GB of memory for ${suggestedLayers.min_layers} layers.`
@@ -237,9 +246,9 @@ const P2pConfigWidget = ({ status }: P2pConfigProps) => {
                   )}
                 </Button>
                 <p className="text-xs text-left text-yellow-500">
-                  Generating a new Aptos Account and fund it with 1 APT from testnet
-                  faucet. Remember to save the generated privatekey somewhere available
-                  to you just in case.
+                  Generating a new Aptos Account and fund it with 1 APT from
+                  testnet faucet. Remember to save the generated privatekey
+                  somewhere available to you just in case.
                 </p>
                 <Separator className="my-6" />
                 <Label htmlFor="privateKey" className="text-center">
@@ -274,7 +283,9 @@ const P2pConfigWidget = ({ status }: P2pConfigProps) => {
                       </Tooltip>
                     </TooltipProvider>
                     {accountBalance && (
-                      <span className="text-sm">Balance: {accountBalance} APT</span>
+                      <span className="text-sm">
+                        Balance: {accountBalance} APT
+                      </span>
                     )}
                   </div>
                 ) : (
@@ -303,7 +314,9 @@ const P2pConfigWidget = ({ status }: P2pConfigProps) => {
                   </Select>
                 </div>
                 <div className="w-1/4">
-                  <Select onValueChange={(value) => setMaxMemory(Number(value))}>
+                  <Select
+                    onValueChange={(value) => setMaxMemory(Number(value))}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Max Memory" />
                     </SelectTrigger>
