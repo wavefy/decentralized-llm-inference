@@ -41,6 +41,7 @@ ARG VITE_VLLM_URL
 ARG VITE_VLLM_CONTROLS_URL
 ARG VITE_NODIT_GQL_API
 ARG VITE_VLLM_CONTRACT
+ARG VITE_REGISTRY_URL
 
 # Download additional development dependencies before building, as some projects require
 # "devDependencies" to be installed to build. If you don't need this, remove this step.
@@ -56,6 +57,7 @@ ENV VITE_VLLM_URL=$VITE_VLLM_URL
 ENV VITE_VLLM_CONTROLS_URL=$VITE_VLLM_CONTROLS_URL
 ENV VITE_NODIT_GQL_API=$VITE_NODIT_GQL_API
 ENV VITE_VLLM_CONTRACT=$VITE_VLLM_CONTRACT
+ENV VITE_REGISTRY_URL=$VITE_REGISTRY_URL
 ENV VITE_MODE=cloud
 
 RUN pnpm run build

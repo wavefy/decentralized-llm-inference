@@ -25,15 +25,12 @@ services:
       args:
         VITE_VLLM_URL: https://api.llm.wavefy.network
         VITE_VLLM_CONTROLS_URL: https://api.llm.wavefy.network
+        VITE_REGISTRY_URL: https://registry.llm.wavefy.network
         VITE_VLLM_CONTRACT: 0xf24a5c56cbaac7756413042d3456bef5e9aa6235defa675df962b7e541f1d20b
         VITE_NODIT_GQL_API: https://aptos-testnet.nodit.io/c4SvS8ZuP7dI9kHC2dRBpFzSKjmFS2eb/v1/graphql
+
     ports:
       - 5173:80
-    environment:
-      - VITE_VLLM_URL="https://api.llm.wavefy.network"
-      - VITE_VLLM_CONTROLS_URL="https://control.llm.wavefy.network"
-      - VITE_VLLM_CONTRACT="0xf24a5c56cbaac7756413042d3456bef5e9aa6235defa675df962b7e541f1d20b"
-      - VITE_NODIT_GQL_API="https://aptos-testnet.nodit.io/c4SvS8ZuP7dI9kHC2dRBpFzSKjmFS2eb/v1/graphql"
   # registry:
   #   container_name: openai-registry
   #   build:
