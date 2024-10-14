@@ -82,7 +82,7 @@ const SidebarTabs = ({
                               >
                                 <span className="text-sm font-normal max-w-[184px] truncate">
                                   {messages.length > 0
-                                    ? messages[0].content
+                                    ? messages.find((m) => m.role === "user")?.content
                                     : ""}
                                 </span>
                               </Link>
