@@ -45,8 +45,6 @@ export default function ChatPage({ chatId, setChatId }: ChatPageProps) {
       },
     }
   );
-  const { status } = useP2PStatus({ baseControlUrl: controlBasePath });
-
 
   React.useEffect(() => {
     if (chatId) {
@@ -72,6 +70,14 @@ export default function ChatPage({ chatId, setChatId }: ChatPageProps) {
     e.preventDefault();
 
     if (messages.length === 0) {
+      // push system prompt
+      if (chatOptions.systemPrompt) {
+        messages.push({
+          id: uuidv4(),
+          content: chatOptions.systemPrompt,
+          role: "system"
+        })
+      }
       // Generate a random id for the chat
       const id = uuidv4();
       setChatId(id);
