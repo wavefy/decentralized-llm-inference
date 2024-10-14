@@ -2,6 +2,7 @@ use p2p_network::addr::NodeId;
 use poem::{
     get, handler,
     listener::TcpListener,
+    middleware::Cors,
     web::{websocket::WebSocket, Data, Json, Path},
     EndpointExt, IntoResponse, Route, Server,
 };
@@ -54,7 +55,8 @@ impl RegistryServer {
                 .at("/api/:model/distribution", get(distribution.data(stream_tx.clone())))
                 .at("/ws/:model/:node", get(ws.data(stream_tx.clone())))
                 .at("/api/health", get(health.data(stream_tx)))
-                .at("/api/models", get(list_models));
+                .at("/api/models", get(list_models))
+                .with(Cors::new());
 
             Server::new(TcpListener::bind(http_addr)).run(app).await
         });
