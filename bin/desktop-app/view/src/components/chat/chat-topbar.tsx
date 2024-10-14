@@ -63,7 +63,7 @@ export default function ChatTopbar({
 
   const fetchData = async () => {
     if (status) {
-      setChatOptions({ ...chatOptions, selectedModel: status.models[0].model });
+      setChatOptions({ ...chatOptions, selectedModel: status?.models[0]?.model });
     }
   };
 

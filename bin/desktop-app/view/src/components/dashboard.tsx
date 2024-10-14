@@ -4,6 +4,8 @@ import {
   GET_CREATED_SESSION,
   GET_CLAIMED_REQUESTS,
   ownerJsonFilter,
+  GET_CLAIMER_REQUESTS,
+  claimerJsonFilter,
 } from "@/queries/indexer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -44,7 +46,8 @@ interface ClaimedRequestEventData {
 
 const Dashboard: React.FC = () => {
   const [createdSessionsPage, setCreatedSessionsPage] = React.useState(0);
-  const [claimedRequestsPage, setClaimedRequestsPage] = React.useState(0);
+  const [claimerRequestPage, setClaimerRequestsPage] = React.useState(0);
+  const [claimedRequestPage, setClaimedRequestsPage] = React.useState(0);
 
   const { status, isLoading: statusLoading } = useP2PStatus({
     baseControlUrl: controlBasePath,
@@ -61,17 +64,27 @@ const Dashboard: React.FC = () => {
       skip: !status?.models[0]?.wallet.address,
     });
 
-  const { data: claimedRequestsData, loading: claimedRequestsLoading } =
-    useQuery(GET_CLAIMED_REQUESTS, {
+  const { data: claimerRequestData, loading: claimerRequestLoading } =
+    useQuery(GET_CLAIMER_REQUESTS, {
       variables: {
         limit: ITEMS_PER_PAGE,
-        offset: claimedRequestsPage * ITEMS_PER_PAGE,
+        offset: claimerRequestPage * ITEMS_PER_PAGE,
         jsonFilter: ownerJsonFilter(status?.models[0]?.wallet.address!),
       },
       pollInterval: 5000,
       skip: !status?.models[0]?.wallet.address,
     });
 
+  const { data: claimedRequestData, loading: claimedRequestLoading } =
+    useQuery(GET_CLAIMED_REQUESTS, {
+      variables: {
+        limit: ITEMS_PER_PAGE,
+        offset: claimedRequestPage * ITEMS_PER_PAGE,
+        jsonFilter: claimerJsonFilter(status?.models[0]?.wallet.address!),
+      },
+      pollInterval: 5000,
+      skip: !status?.models[0]?.wallet.address,
+    });
   if (statusLoading) {
     return <div>Loading P2P status...</div>;
   }
@@ -195,10 +208,10 @@ const Dashboard: React.FC = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Claimed Requests</CardTitle>
+          <CardTitle>Claimer</CardTitle>
         </CardHeader>
         <CardContent>
-          {claimedRequestsLoading ? (
+          {claimerRequestLoading ? (
             <p>Loading...</p>
           ) : (
             <>
@@ -214,7 +227,7 @@ const Dashboard: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {claimedRequestsData?.events.map(
+                  {claimerRequestData?.events.map(
                     (event: any, index: number) => {
                       const data: ClaimedRequestEventData = event.data;
                       return (
@@ -250,15 +263,90 @@ const Dashboard: React.FC = () => {
               <div className="flex justify-between mt-4">
                 <Button
                   onClick={() =>
+                    setClaimerRequestsPage((prev) => Math.max(0, prev - 1))
+                  }
+                  disabled={claimerRequestPage === 0}
+                >
+                  Previous
+                </Button>
+                <Button
+                  onClick={() => setClaimerRequestsPage((prev) => prev + 1)}
+                  disabled={claimerRequestData?.events.length < ITEMS_PER_PAGE}
+                >
+                  Next
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Claimed Requests</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {claimedRequestLoading ? (
+            <p>Loading...</p>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Owner</TableHead>
+                    <TableHead>Claimer</TableHead>
+                    <TableHead>Session ID</TableHead>
+                    <TableHead>Token Count</TableHead>
+                    <TableHead>Total Reward</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {claimedRequestData?.events.map(
+                    (event: any, index: number) => {
+                      const data: ClaimedRequestEventData = event.data;
+                      return (
+                        <TableRow key={index}>
+                          <TableCell>
+                            {new Date(+data.ts * 1000).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            <CopyableAddress
+                              address={data.owner}
+                              isCurrentUser={status?.models.some(
+                                (m) => m.wallet.address === data.owner
+                              )}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <CopyableAddress
+                              address={data.claimer}
+                              isCurrentUser={status?.models.some(
+                                (m) => m.wallet.address === data.claimer
+                              )}
+                            />
+                          </TableCell>
+                          <TableCell>{data.session_id}</TableCell>
+                          <TableCell>{data.token_count}</TableCell>
+                          <TableCell>{data.total_reward}</TableCell>
+                        </TableRow>
+                      );
+                    }
+                  )}
+                </TableBody>
+              </Table>
+              <div className="flex justify-between mt-4">
+                <Button
+                  onClick={() =>
                     setClaimedRequestsPage((prev) => Math.max(0, prev - 1))
                   }
-                  disabled={claimedRequestsPage === 0}
+                  disabled={claimedRequestPage === 0}
                 >
                   Previous
                 </Button>
                 <Button
                   onClick={() => setClaimedRequestsPage((prev) => prev + 1)}
-                  disabled={claimedRequestsData?.events.length < ITEMS_PER_PAGE}
+                  disabled={claimedRequestData?.events.length < ITEMS_PER_PAGE}
                 >
                   Next
                 </Button>

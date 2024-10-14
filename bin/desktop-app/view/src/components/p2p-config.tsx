@@ -93,6 +93,7 @@ const P2pConfigWidget = ({ status }: P2pConfigProps) => {
       const currentModelCount = status.models.length;
       if (currentModelCount > prevModelCount) {
         // A new model has been added
+        setLoading(false);
         setIsDialogOpen(false);
       }
       setPrevModelCount(currentModelCount);

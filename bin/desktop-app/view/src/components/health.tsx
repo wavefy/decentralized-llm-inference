@@ -46,8 +46,8 @@ const isModelComplete = (nodes: SwarmHealth['nodes'], totalLayers: number) => {
   if (nodes.length === 0) return false;
 
   const layerRanges = nodes.map(node => ({
-    start: node.info.layers.start,
-    end: node.info.layers.end
+    start: node.info?.layers?.start || 0,
+    end: node.info?.layers?.end || 0
   }));
 
   // Sort the ranges by start value
@@ -188,12 +188,12 @@ const SwarmHealthTables = ({
                         <TableCell>{node.id}</TableCell>
                         <TableCell>
                           <div>
-                            {node.info.layers.start} - {node.info.layers.end} (out of{" "}
+                            {node.info?.layers?.start} - {node.info?.layers?.end} (out of{" "}
                             {model.total_layers})
                           </div>
                           <LayerVisualizer
-                            start={node.info.layers.start}
-                            end={node.info.layers.end}
+                            start={node.info?.layers?.start}
+                            end={node.info?.layers?.end}
                             total={model.total_layers}
                           />
                         </TableCell>
