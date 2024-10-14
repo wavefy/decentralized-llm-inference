@@ -197,7 +197,7 @@ const SwarmHealthTables = ({
                             total={model.total_layers}
                           />
                         </TableCell>
-                        <TableCell>{node.info.stats.token_out_tps}</TableCell>
+                        <TableCell>{node.info.stats.token_out_tps} tps</TableCell>
                         <TableCell>{node.info.stats.token_out_sum}</TableCell>
                         <TableCell>{formatBytes(node.info.stats.network_out_bytes)} ({formatBits(node.info.stats.network_out_bps)})</TableCell>
                         <TableCell>{formatBytes(node.info.stats.network_in_bytes)} ({formatBits(node.info.stats.network_in_bps)})</TableCell>
