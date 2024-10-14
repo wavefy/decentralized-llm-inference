@@ -17,3 +17,4 @@ usage-service = { path = "../../crates/usage-service", version = "0.1.0" }
 
 [features]
 metal = ["models/metal"]
+cuda = ["models/cuda"]
