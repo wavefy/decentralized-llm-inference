@@ -40,7 +40,7 @@ export default function ChatPage({ chatId, setChatId }: ChatPageProps) {
     {
       defaultValue: {
         selectedModel: "llama32-1b",
-        systemPrompt: "",
+        systemPrompt: "You are a helpful assistant.",
         temperature: 0.9,
       },
     }

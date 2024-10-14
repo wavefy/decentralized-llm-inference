@@ -30,6 +30,7 @@ interface CreatedSessionEventData {
   price_per_token: number;
   addresses: string[];
   layers: number[];
+  ts: string;
 }
 
 interface ClaimedRequestEventData {
@@ -38,6 +39,7 @@ interface ClaimedRequestEventData {
   session_id: number;
   token_count: number;
   total_reward: number;
+  ts: string;
 }
 
 const Dashboard: React.FC = () => {
@@ -98,7 +100,10 @@ const Dashboard: React.FC = () => {
         <Card>
           <CardContent>
             <p className="text-center py-4">
-              No active models. {appMode === "local" ? "Start a new model to begin." : "Wait for a model to be assigned."}
+              No active models.{" "}
+              {appMode === "local"
+                ? "Start a new model to begin."
+                : "Wait for a model to be assigned."}
             </p>
           </CardContent>
         </Card>
@@ -116,6 +121,7 @@ const Dashboard: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Time</TableHead>
                     <TableHead>Owner</TableHead>
                     <TableHead>Max Tokens</TableHead>
                     <TableHead>Session ID</TableHead>
@@ -131,15 +137,32 @@ const Dashboard: React.FC = () => {
                       return (
                         <TableRow key={index}>
                           <TableCell>
+                            {new Date(+data.ts * 1000).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
                             <CopyableAddress
                               address={data.owner}
-                              isCurrentUser={status?.models.some(m => m.wallet.address === data.owner)}
+                              isCurrentUser={status?.models.some(
+                                (m) => m.wallet.address === data.owner
+                              )}
                             />
                           </TableCell>
                           <TableCell>{data.max_tokens}</TableCell>
                           <TableCell>{data.session_id}</TableCell>
                           <TableCell>{data.price_per_token}</TableCell>
-                          <TableCell>{data.addresses.join(", ")}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {data.addresses.map((address, idx) => (
+                                <CopyableAddress
+                                  key={idx}
+                                  address={address}
+                                  isCurrentUser={status?.models.some(
+                                    (m) => m.wallet.address === address
+                                  )}
+                                />
+                              ))}
+                            </div>
+                          </TableCell>
                           <TableCell>{data.layers.join(", ")}</TableCell>
                         </TableRow>
                       );
@@ -180,6 +203,7 @@ const Dashboard: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Time</TableHead>
                     <TableHead>Claimer</TableHead>
                     <TableHead>Owner</TableHead>
                     <TableHead>Session ID</TableHead>
@@ -194,15 +218,22 @@ const Dashboard: React.FC = () => {
                       return (
                         <TableRow key={index}>
                           <TableCell>
+                            {new Date(+data.ts * 1000).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
                             <CopyableAddress
                               address={data.claimer}
-                              isCurrentUser={status?.models.some(m => m.wallet.address === data.claimer)}
+                              isCurrentUser={status?.models.some(
+                                (m) => m.wallet.address === data.claimer
+                              )}
                             />
                           </TableCell>
                           <TableCell>
                             <CopyableAddress
                               address={data.owner}
-                              isCurrentUser={status?.models.some(m => m.wallet.address === data.owner)}
+                              isCurrentUser={status?.models.some(
+                                (m) => m.wallet.address === data.owner
+                              )}
                             />
                           </TableCell>
                           <TableCell>{data.session_id}</TableCell>

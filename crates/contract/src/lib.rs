@@ -13,7 +13,7 @@ use std::{ops::Range, sync::Arc};
 use usage_service::WorkerUsageService;
 use validator::Checkpoint;
 
-pub const CONTRACT_ADDRESS: &str = "0xf24a5c56cbaac7756413042d3456bef5e9aa6235defa675df962b7e541f1d20b";
+pub const CONTRACT_ADDRESS: &str = "0xf4289dca4fe79c4e61fe1255d7f47556c38f512b5cf9ddf727f0e44a5c6a6b00";
 
 pub enum OnChainEvent {
     LayerWorkerClaimToken(u64, Address),
