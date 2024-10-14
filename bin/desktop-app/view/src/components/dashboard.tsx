@@ -163,7 +163,9 @@ const Dashboard: React.FC = () => {
                               ))}
                             </div>
                           </TableCell>
-                          <TableCell>{data.layers.join(", ")}</TableCell>
+                          <TableCell>
+                            {data.layers.map((l) => +l - 1).join(", ")}
+                          </TableCell>
                         </TableRow>
                       );
                     }
