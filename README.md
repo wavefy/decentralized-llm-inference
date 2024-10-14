@@ -49,6 +49,9 @@ Imagine a scenario where a 60-layer LLM is split across multiple devices within 
 
 This visualization demonstrates how even a relatively complex model, like one with 60 layers, can be made usable in the real world through decentralization. It opens up possibilities for deploying advanced AI applications in everyday environments, leveraging the collective power of distributed computing.
 
-## Testing Model (WIP)
+## Supported Models
 
-Phi-3 (32 layers)
+- Phi3
+- unsloth/Llama-3.2-1B-Instruct
+- unsloth/Llama-3.2-3B-Instruct
+- unsloth/Llama-3.2-11B-Instruct
