@@ -1,4 +1,4 @@
-use std::{ops::Range, sync::Arc};
+use std::{io::Read, ops::Range, sync::Arc, time::Instant};
 
 use candle_core::{Device, Tensor};
 use model_router::RouteTable;
@@ -7,6 +7,7 @@ use p2p_network::addr::NodeId;
 use prost::Message;
 use protocol::{
     llm::*,
+    registry::to_registry::Stats,
     worker::event::{RpcReq, RpcRes},
     ChatCfg, Session,
 };
@@ -42,6 +43,8 @@ pub struct ModelService<LW, const MODEL_LAYERS: usize> {
     sessions: SharedHashMap<Session, SessionContainer>,
     router: Arc<RwLock<RouteTable<NodeId, MODEL_LAYERS>>>,
     usage_service: Arc<dyn WorkerUsageService>,
+    stats: RwLock<Stats>,
+    last_updated_stats: RwLock<(Instant, Stats)>,
 }
 
 impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_LAYERS: usize> ModelService<LW, MODEL_LAYERS> {
@@ -53,14 +56,35 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
             router,
             sessions: Default::default(),
             usage_service,
+            stats: Default::default(),
+            last_updated_stats: RwLock::new((Instant::now(), Stats::default())),
         }
     }
 }
 
 #[async_trait::async_trait]
 impl<LW: ModelLayersWorker<(Tensor, u32)>, const MODEL_LAYERS: usize> ServiceHandler<MODEL_LAYERS> for ModelService<LW, MODEL_LAYERS> {
+    fn tick(&self) {
+        let mut last_updated_stats = self.last_updated_stats.write();
+        let milis = (*last_updated_stats).0.elapsed().as_millis() as u64;
+        if milis >= 1000 {
+            let pre = last_updated_stats.1.clone();
+            let mut now = self.stats.write();
+            now.token_out_tps = (now.token_out_sum - pre.token_out_sum) as f32 * 1000.0 / milis as f32;
+            now.network_in_bps = (now.network_in_bytes - pre.network_in_bytes) * 8000 / milis;
+            now.network_out_bps = (now.network_out_bytes - pre.network_out_bytes) * 8000 / milis;
+
+            last_updated_stats.0 = Instant::now();
+            last_updated_stats.1 = now.clone();
+        }
+    }
+
     fn sessions(&self) -> Vec<u64> {
         self.sessions.keys_clone().into_iter().map(|s| *s).collect()
+    }
+
+    fn stats(&self) -> Stats {
+        self.stats.read().clone()
     }
 
     async fn on_req(&self, _from: NodeId, req: RpcReq) -> RpcRes {
@@ -73,10 +97,13 @@ impl<LW: ModelLayersWorker<(Tensor, u32)>, const MODEL_LAYERS: usize> ServiceHan
                 RpcRes { seq: req.seq, success: true, payload }
             }
             "FORWARD" => {
+                self.more_net_in(req.payload.len());
                 let forward_req = ForwardReq::decode(req.payload.as_slice()).unwrap();
                 let res = self.forward(forward_req).await;
                 let mut payload = Vec::new();
                 res.encode(&mut payload).unwrap();
+
+                self.more_net_out(payload.len());
                 RpcRes { seq: req.seq, success: true, payload }
             }
             "END" => {
@@ -179,6 +206,7 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
                     log::info!("[ModelService] session {} forward step {} local {layers:?} layers ...", req.session, req.step);
                     let embedding = TensorBuf::try_from(req.embedding.clone()).unwrap().to_tensor(&self.device).unwrap();
                     let (embedding, _) = self.layers.forward(Session(req.session), req.step, (embedding, req.seq_len), req.index_pos).await.unwrap();
+                    self.more_token_out();
                     log::info!("[ModelService] session {} forward step {} local {layers:?} layers done", req.session, req.step);
                     TensorBuf::from(embedding).to_vec()
                 } else {
@@ -193,6 +221,7 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
                         remote_session.0,
                         embedding.len(),
                     );
+                    self.more_net_out(embedding.len());
                     let res = self
                         .rpc
                         .request(
@@ -214,6 +243,7 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
                             metadata: req.metadata.clone(),
                             ..Default::default()
                         });
+                    self.more_net_in(res.embedding.len());
                     log::info!(
                         "[ModelService] session {} forward step {} remote {dest:?} with remote session {} done",
                         req.session,
@@ -286,5 +316,22 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
             log::warn!("[ModelService] end session {} but not found", req.session);
             EndRes { success: false, metadata: vec![] }
         }
+    }
+
+    fn more_net_in(&self, bytes: usize) {
+        self.stats.write().network_in_bytes += bytes as u64;
+    }
+
+    fn more_net_out(&self, bytes: usize) {
+        self.stats.write().network_out_bytes += bytes as u64;
+    }
+
+    #[allow(unused)]
+    fn more_token_in(&self) {
+        self.stats.write().token_in_sum += 1;
+    }
+
+    fn more_token_out(&self) {
+        self.stats.write().token_out_sum += 1;
     }
 }

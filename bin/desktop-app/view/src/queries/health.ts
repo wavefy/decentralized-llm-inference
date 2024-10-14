@@ -8,7 +8,7 @@ export const useSwarmHealth = ({ registryUrl }: { registryUrl: string }) => {
     {
       queryKey: ["SWARM-HEALTH"],
       queryFn: () => fetchSwarmHealth(registryUrl),
-      refetchInterval: 5000,
+      refetchInterval: 2500,
     },
     queryClient
   );
@@ -18,7 +18,7 @@ export const useSwarmHealth = ({ registryUrl }: { registryUrl: string }) => {
 
 export const useSupportedModels = ({ registryUrl }: { registryUrl: string }) => {
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery<{id: string, layers: number, memory: number}[]>(
+  const { data, isLoading } = useQuery<{ id: string, layers: number, memory: number }[]>(
     {
       queryKey: ["SUPPORTED-MODELS"],
       queryFn: () => fetchSupportedModels(registryUrl),

@@ -44,15 +44,15 @@ const Health = () => {
 
 const isModelComplete = (nodes: SwarmHealth['nodes'], totalLayers: number) => {
   if (nodes.length === 0) return false;
-  
+
   const layerRanges = nodes.map(node => ({
     start: node.info.layers.start,
     end: node.info.layers.end
   }));
-  
+
   // Sort the ranges by start value
   layerRanges.sort((a, b) => a.start - b.start);
-  
+
   let coveredUntil = 0;
   for (const range of layerRanges) {
     if (range.start > coveredUntil + 1) {
@@ -61,7 +61,7 @@ const isModelComplete = (nodes: SwarmHealth['nodes'], totalLayers: number) => {
     }
     coveredUntil = Math.max(coveredUntil, range.end);
   }
-  
+
   // Check if we've covered all layers
   return coveredUntil === totalLayers;
 };
@@ -87,13 +87,12 @@ const SupportedModels = ({
           {models?.map((model, index) => {
             const healthData = swarmHealth?.find(h => h.model === model.id);
             const complete = healthData ? isModelComplete(healthData.nodes, healthData.total_layers) : false;
-            
+
             return (
               <React.Fragment key={model.id}>
-                <span 
-                  className={`font-medium ${
-                    complete ? 'text-green-500' : 'text-yellow-500'
-                  }`}
+                <span
+                  className={`font-medium ${complete ? 'text-green-500' : 'text-yellow-500'
+                    }`}
                 >
                   {model.id}
                 </span>
@@ -158,7 +157,7 @@ const SwarmHealthTables = ({
       {supportedModels?.map((supportedModel) => {
         const model = modelMap.get(supportedModel.id) || { model: supportedModel.id, total_layers: supportedModel.layers, nodes: [] };
         const complete = isModelComplete(model.nodes, model.total_layers);
-        
+
         return (
           <Card key={model.model} className="mb-8">
             <CardHeader>
@@ -176,6 +175,10 @@ const SwarmHealthTables = ({
                   <TableRow>
                     <TableHead>Node ID</TableHead>
                     <TableHead>Layers</TableHead>
+                    <TableHead>Output Tps</TableHead>
+                    <TableHead>Output Tokens</TableHead>
+                    <TableHead>Network Out</TableHead>
+                    <TableHead>Network In</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -194,6 +197,10 @@ const SwarmHealthTables = ({
                             total={model.total_layers}
                           />
                         </TableCell>
+                        <TableCell>{node.info.stats.token_out_tps}</TableCell>
+                        <TableCell>{node.info.stats.token_out_sum}</TableCell>
+                        <TableCell>{node.info.stats.network_out_bytes}</TableCell>
+                        <TableCell>{node.info.stats.network_in_bytes}</TableCell>
                       </TableRow>
                     ))
                   ) : (

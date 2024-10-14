@@ -12,7 +12,10 @@ use model_service::ModelService;
 pub use model_service::{WorkerEvent, WorkerEventWithResp};
 use models::ModelLayersWorker;
 use p2p_network::addr::NodeId;
-use protocol::worker::event::{RpcReq, RpcRes};
+use protocol::{
+    registry::to_registry::Stats,
+    worker::event::{RpcReq, RpcRes},
+};
 use rpc::create_rpc;
 use spin::RwLock;
 use usage_service::WorkerUsageService;
@@ -20,7 +23,9 @@ pub use virtual_model_layers::*;
 
 #[async_trait::async_trait]
 pub trait ServiceHandler<const MODEL_LAYERS: usize>: Send + Sync + 'static {
+    fn tick(&self);
     fn sessions(&self) -> Vec<u64>;
+    fn stats(&self) -> Stats;
     async fn on_req(&self, from: NodeId, req: RpcReq) -> RpcRes;
 }
 

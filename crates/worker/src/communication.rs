@@ -89,6 +89,9 @@ impl<const MODEL_LAYERS: usize> WorkerCommunication<MODEL_LAYERS> {
             tokio::select! {
                 _ = self.ticker.tick() => {
                     let now_ms = now_ms();
+                    self.rpc_handler.tick();
+                    let stats = self.rpc_handler.stats();
+                    self.registry_client.update_stats(stats);
                     let sync_msg = self.router.read().create_sync(now_ms);
                     if let Err(e) = self.network.broadcast(&protocol::worker::Event { event: Some(protocol::worker::event::Event::SyncReq(sync_msg.into())) }) {
                         log::error!("[WorkerComunication] broadcast route sync error {e:?}");

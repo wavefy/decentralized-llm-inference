@@ -38,10 +38,22 @@ message ToRegistry {
         RelayData data = 2;
     }
 
+    message Stats {
+        uint64 network_in_bytes = 1;
+        uint64 network_out_bytes = 2;
+        uint32 token_in_sum = 3;
+        uint32 token_out_sum = 4;
+        uint64 network_in_bps = 5;
+        uint64 network_out_bps = 6;
+        float token_in_tps = 7;
+        float token_out_tps = 8;
+    }
+
     oneof event {
         UpdateRequest update = 2;
         NeighboursRequest neighbours = 3;
         Relay relay = 4;
+        Stats stats = 5;
     }
 }
 
