@@ -153,7 +153,6 @@ export function Sidebar({
             <Pencil2Icon className="w-4 h-4" />
           </div>
         </Link>
-        <P2PStatusWidget status={status} />
       </div>
       <SidebarTabs
         isLoading={isLoading}

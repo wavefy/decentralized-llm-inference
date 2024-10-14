@@ -21,11 +21,11 @@ use tokio::sync::{
 use crate::worker::{run_model_worker, WorkerControl};
 
 pub struct ModelState {
-    model: String,
-    from_layer: u32,
-    to_layer: u32,
-    query_tx: Sender<WorkerControl>,
-    wallet: Arc<OnChainService>,
+    pub model: String,
+    pub from_layer: u32,
+    pub to_layer: u32,
+    pub query_tx: Sender<WorkerControl>,
+    pub wallet: Arc<OnChainService>,
 }
 
 #[derive(Clone)]

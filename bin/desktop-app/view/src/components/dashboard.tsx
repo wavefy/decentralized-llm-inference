@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { useQuery } from "@apollo/client";
 import {
   GET_CREATED_SESSION,
@@ -16,8 +16,10 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useP2PStatus } from "@/queries/p2p";
-import { controlBasePath } from "@/lib/utils";
+import { appMode, controlBasePath } from "@/lib/utils";
 import CopyableAddress from "./copyable-address";
+import P2pStatusDashboard from "./p2p-status-dashboard";
+import { P2pConfig } from "./p2p-config";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -39,8 +41,8 @@ interface ClaimedRequestEventData {
 }
 
 const Dashboard: React.FC = () => {
-  const [createdSessionsPage, setCreatedSessionsPage] = useState(0);
-  const [claimedRequestsPage, setClaimedRequestsPage] = useState(0);
+  const [createdSessionsPage, setCreatedSessionsPage] = React.useState(0);
+  const [claimedRequestsPage, setClaimedRequestsPage] = React.useState(0);
 
   const { status, isLoading: statusLoading } = useP2PStatus({
     baseControlUrl: controlBasePath,
@@ -51,10 +53,10 @@ const Dashboard: React.FC = () => {
       variables: {
         limit: ITEMS_PER_PAGE,
         offset: createdSessionsPage * ITEMS_PER_PAGE,
-        jsonFilter: ownerJsonFilter(status?.address!),
+        jsonFilter: ownerJsonFilter(status?.models[0]?.wallet.address!),
       },
       pollInterval: 5000,
-      skip: !status?.address,
+      skip: !status?.models[0]?.wallet.address,
     });
 
   const { data: claimedRequestsData, loading: claimedRequestsLoading } =
@@ -62,50 +64,45 @@ const Dashboard: React.FC = () => {
       variables: {
         limit: ITEMS_PER_PAGE,
         offset: claimedRequestsPage * ITEMS_PER_PAGE,
-        jsonFilter: ownerJsonFilter(status?.address!),
+        jsonFilter: ownerJsonFilter(status?.models[0]?.wallet.address!),
       },
       pollInterval: 5000,
-      skip: !status?.address,
+      skip: !status?.models[0]?.wallet.address,
     });
 
   if (statusLoading) {
     return <div>Loading P2P status...</div>;
   }
 
-  if (!status?.address) {
-    return <div>P2P status not ready. Please start a P2P session.</div>;
-  }
-
   return (
     <div className="container mx-auto p-4 space-y-6">
       <h1 className="text-3xl font-bold">Dashboard</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Sessions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-4xl font-bold">{status.sessions}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Peers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-4xl font-bold">{status.peers}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Balance</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-4xl font-bold">{status.balance?.toFixed(2)}</p>
-          </CardContent>
-        </Card>
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-semibold">Active Models</h2>
+        {appMode === "local" && <P2pConfig status={status} />}
       </div>
+
+      {status?.models && status.models.length > 0 ? (
+        status.models.map((model, index) => (
+          <Card key={index} className="mb-6">
+            <CardHeader>
+              <CardTitle>Model: {model.model}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <P2pStatusDashboard status={model} />
+            </CardContent>
+          </Card>
+        ))
+      ) : (
+        <Card>
+          <CardContent>
+            <p className="text-center py-4">
+              No active models. {appMode === "local" ? "Start a new model to begin." : "Wait for a model to be assigned."}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -136,7 +133,7 @@ const Dashboard: React.FC = () => {
                           <TableCell>
                             <CopyableAddress
                               address={data.owner}
-                              isCurrentUser={data.owner === status.address}
+                              isCurrentUser={status?.models.some(m => m.wallet.address === data.owner)}
                             />
                           </TableCell>
                           <TableCell>{data.max_tokens}</TableCell>
@@ -199,16 +196,15 @@ const Dashboard: React.FC = () => {
                           <TableCell>
                             <CopyableAddress
                               address={data.claimer}
-                              isCurrentUser={data.claimer === status.address}
+                              isCurrentUser={status?.models.some(m => m.wallet.address === data.claimer)}
                             />
                           </TableCell>
                           <TableCell>
                             <CopyableAddress
                               address={data.owner}
-                              isCurrentUser={data.owner === status.address}
+                              isCurrentUser={status?.models.some(m => m.wallet.address === data.owner)}
                             />
                           </TableCell>
-
                           <TableCell>{data.session_id}</TableCell>
                           <TableCell>{data.token_count}</TableCell>
                           <TableCell>{data.total_reward}</TableCell>

@@ -1,0 +1,1 @@
+cargo run --release --features metal -- --http-bind 127.0.0.1:18888 --registry-server ws://127.0.0.1:3000/ws gateway --private-key 0x3bba41ade33b801bf3e42a080a699e73654eaf1775fb0afc5d65f5449e55d74b --models llama32-1b

@@ -27,9 +27,13 @@ export const startP2pSession = async (
   return response.json();
 };
 
-export const stopP2pSession = async (baseControlUrl: string) => {
+export const stopP2pSession = async (baseControlUrl: string, model: string) => {
   const response = await fetch(baseControlUrl + "/p2p/v1/stop", {
     method: "POST",
+    body: JSON.stringify({ model }),
+    headers: {
+      "Content-Type": "application/json",
+    },
   });
   return response.json();
 };

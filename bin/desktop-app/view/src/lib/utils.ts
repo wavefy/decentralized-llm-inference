@@ -12,6 +12,7 @@ export const controlBasePath = import.meta.env.VITE_VLLM_CONTROLS_URL ?? "";
 export const contractAddress = import.meta.env.VITE_VLLM_CONTRACT ?? "";
 export const noditApiUrl = import.meta.env.VITE_NODIT_GQL_API ?? "";
 export const registryUrl = import.meta.env.VITE_REGISTRY_URL ?? "";
+export const appMode: "local" | "cloud" = import.meta.env.VITE_MODE ?? "local";
 
 export function useHasMounted() {
   const [hasMounted, setHasMounted] = useState(false);

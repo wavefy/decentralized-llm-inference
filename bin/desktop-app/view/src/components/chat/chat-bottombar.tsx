@@ -40,15 +40,12 @@ export default function ChatBottombar({
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey && hasSelectedModel && !isLoading) {
       e.preventDefault();
-      status?.models[0].wallet.topup_balance &&
+      status?.models[0]?.wallet.topup_balance &&
         handleSubmit(e as unknown as React.FormEvent<HTMLFormElement>);
     }
   };
 
   const [tokenLimit, setTokenLimit] = React.useState<number>(4096);
-  React.useEffect(() => {
-    getTokenLimit(basePath).then((limit) => setTokenLimit(limit));
-  }, [hasMounted]);
 
   const tokenCount = React.useMemo(
     () => (input ? llama3Tokenizer.encode(input).length - 1 : 0),
@@ -71,11 +68,11 @@ export default function ChatBottombar({
               onChange={handleInputChange}
               name="message"
               placeholder={
-                status?.models[0].wallet.topup_balance
+                status?.models[0]?.wallet.topup_balance
                   ? "Ask vLLM anything..."
                   : "Deposit to your Top up your balance to start chatting"
               }
-              disabled={!status?.models[0].wallet.topup_balance}
+              disabled={!status?.models[0]?.wallet.topup_balance}
               className="border-input max-h-48 px-4 py-4 text-base shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 dark:focus-visible:ring-slate-500 disabled:cursor-not-allowed disabled:opacity-50 w-full border rounded-md flex items-center h-14 resize-none overflow-hidden dark:bg-card/35 pr-32"
             />
             <div className="text-xs text-muted-foreground absolute right-14 px-0 text-right">
@@ -98,7 +95,7 @@ export default function ChatBottombar({
                   isLoading ||
                   !input.trim() ||
                   !hasSelectedModel ||
-                  !status?.models[0].wallet.topup_balance
+                  !status?.models[0]?.wallet.topup_balance
                 }
               >
                 <PaperPlaneIcon className="w-5 h-5 text-white dark:text-black" />

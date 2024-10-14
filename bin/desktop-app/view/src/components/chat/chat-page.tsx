@@ -47,14 +47,6 @@ export default function ChatPage({ chatId, setChatId }: ChatPageProps) {
   );
   const { status } = useP2PStatus({ baseControlUrl: controlBasePath });
 
-  useEffect(() => {
-    if (status?.models[0].model) {
-      setChatOptions({
-        ...chatOptions,
-        selectedModel: status.models[0].model,
-      });
-    }
-  }, [status]);
 
   React.useEffect(() => {
     if (chatId) {
@@ -107,7 +99,6 @@ export default function ChatPage({ chatId, setChatId }: ChatPageProps) {
 
   return (
     <main className="flex h-full flex-col items-center ">
-      <P2pConfig status={status} />
       <ChatLayout
         chatId={chatId}
         setChatId={setChatId}

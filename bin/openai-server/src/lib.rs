@@ -1,6 +1,10 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::{Arc},
+};
 
-use api_control::{p2p_start, p2p_status, p2p_stop, p2p_suggest_layers, P2pState};
+use api_control::{p2p_start, p2p_status, p2p_stop, p2p_suggest_layers, ModelState, P2pState};
 use clap::{Parser, Subcommand};
 use contract::{
     aptos_sdk::{rest_client::AptosBaseUrl, types::LocalAccount},
@@ -12,7 +16,7 @@ use poem::{
     middleware::{Cors, Tracing},
     EndpointExt, Route, Server,
 };
-use tokio::sync::mpsc::channel;
+use tokio::sync::{mpsc::channel, Mutex};
 use worker::run_model_worker;
 
 mod api_control;
@@ -69,26 +73,42 @@ pub async fn start_http_server(http_bind: SocketAddr, registry_server: &str, nod
         }
         ServerMode::Gateway(gateway) => {
             let mut controls = HashMap::new();
-            let models = gateway.models;
-            for model in models {
+            let model_ids = gateway.models;
+            let models: Arc<Mutex<HashMap<String, ModelState>>> = Default::default();
+            for model_id in model_ids {
                 let range = 0..0;
                 let (control_tx, control_rx) = channel(10);
-                controls.insert(model.to_string(), control_tx);
+                controls.insert(model_id.to_string(), control_tx.clone());
                 let account = LocalAccount::from_private_key(&gateway.private_key, 0).expect("Invalid private key");
                 let onchain_service = OnChainService::new(account, AptosBaseUrl::Testnet, range.clone());
                 onchain_service.init().await;
                 let usage_service = Arc::new(onchain_service);
                 let registry_server = registry_server.to_owned();
-                let model = model.to_owned();
+                let model = model_id.to_owned();
                 let node_id = node_id.to_owned();
                 let stun_server = stun_server.to_owned();
                 let store = store.clone();
+                let model_state = ModelState {
+                    model: model_id.to_string(),
+                    from_layer: range.start,
+                    to_layer: range.end,
+                    query_tx: control_tx.clone(),
+                    wallet: usage_service.clone(),
+                };
+                models.lock().await.insert(model_id.to_string(), model_state);
                 tokio::spawn(async move { run_model_worker(&registry_server, &model, &node_id, range, &stun_server, control_rx, usage_service, store.clone()).await });
             }
 
             let (chat_tx, mut chat_rx) = channel(10);
             let openai_app = openai_http::create_route(chat_tx, store.clone());
-            let app = Route::new().nest("/", openai_app).with(Cors::new()).with(Tracing::default());
+            let p2p_app = Route::new().at("/v1/status", poem::get(p2p_status)).data(P2pState {
+                registry_server: registry_server.to_string(),
+                node_id: node_id.to_string(),
+                store: store.clone(),
+                stun_server: stun_server.to_string(),
+                models,
+            });
+            let app = Route::new().nest("/p2p", p2p_app).nest("/", openai_app).with(Cors::new()).with(Tracing::default());
 
             tokio::spawn(async move {
                 while let Some(req) = chat_rx.recv().await {

@@ -10,7 +10,7 @@ import {
 } from "@radix-ui/react-icons";
 import { Button } from "./ui/button";
 import { stopP2pSession } from "@/api/p2p";
-import { controlBasePath, shortenAddress } from "@/lib/utils";
+import { appMode, controlBasePath, shortenAddress } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Tooltip,
@@ -24,17 +24,13 @@ import { toast } from "sonner";
 import { Alert } from "./ui/alert";
 
 interface P2PStatusWidgetProps {
-  status: P2PStatus | undefined;
+  status: ModelStatus;
 }
 
 const P2PStatusWidget: React.FC<P2PStatusWidgetProps> = ({ status }) => {
   const [depositAmount, setDepositAmount] = useState<string>("");
   const [isDepositing, setIsDepositing] = useState<boolean>(false);
   const queryClient = useQueryClient();
-
-  if (!status) {
-    return null;
-  }
 
   const handleDeposit = async () => {
     if (!depositAmount) {
@@ -67,40 +63,40 @@ const P2PStatusWidget: React.FC<P2PStatusWidgetProps> = ({ status }) => {
 
   return (
     <Card className="mb-4">
-      <CardHeader>
-        P2p Status
-      </CardHeader>
+      <CardHeader>P2p Status</CardHeader>
       <CardContent>
         <div className="text-xs space-y-1">
-          {status.models.map((model) => <P2pModelStatus status={model} />)}
-          {/* Add Deposit functionality */}
-          <div className="mt-4 space-y-2">
-            <Input
-              type="number"
-              value={depositAmount}
-              onChange={(e) => setDepositAmount(e.target.value)}
-              placeholder="Enter deposit amount"
-              size={10}
-            />
-            <Button
-              onClick={handleDeposit}
-              disabled={isDepositing || !depositAmount}
-              className="w-full"
-              size="sm"
-            >
-              {isDepositing ? (
-                <>
-                  <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-                  Depositing...
-                </>
-              ) : (
-                "Deposit"
-              )}
-            </Button>
-            <p className="text-xs text-yellow-500">
-              Deposit amount should be in 10 to the power of 8, e.g. 100000000 equals 1 APT
-            </p>
-          </div>
+          <P2pModelStatus status={status} />
+          {appMode === "local" && (
+            <div className="mt-4 space-y-2">
+              <Input
+                type="number"
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(e.target.value)}
+                placeholder="Enter deposit amount"
+                size={10}
+              />
+              <Button
+                onClick={handleDeposit}
+                disabled={isDepositing || !depositAmount}
+                className="w-full"
+                size="sm"
+              >
+                {isDepositing ? (
+                  <>
+                    <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+                    Depositing...
+                  </>
+                ) : (
+                  "Deposit"
+                )}
+              </Button>
+              <p className="text-xs text-yellow-500">
+                Deposit amount should be in 10 to the power of 8, e.g. 100000000
+                equals 1 APT
+              </p>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -145,10 +141,10 @@ function P2pModelStatus({ status }: { status: ModelStatus }) {
     });
   };
 
-  const handleStop = async () => {
+  const handleStop = async (model: string) => {
     setIsStopping(true);
     try {
-      await stopP2pSession(controlBasePath);
+      await stopP2pSession(controlBasePath, model);
       queryClient.invalidateQueries({ queryKey: ["P2P-STATUS"] });
     } catch (error) {
       console.error("Failed to stop P2P session:", error);
@@ -157,77 +153,79 @@ function P2pModelStatus({ status }: { status: ModelStatus }) {
     }
   };
 
-  return (<>
-    {status.status !== "stopped" && (
-      <Button
-        variant="destructive"
-        size="sm"
-        onClick={handleStop}
-        disabled={isStopping}
-      >
-        {isStopping ? (
-          <ReloadIcon className="w-4 h-4 animate-spin mr-2" />
-        ) : null}
-        Stop
-      </Button>
-    )}
-    <p className="flex items-center gap-2">
-      <span>Status:</span>
-      <span
-        className={`flex items-center gap-1 font-semibold ${getStatusColor(status.status)}`}
-      >
-        {isStopping ? (
-          <ReloadIcon className="w-4 h-4 animate-spin text-yellow-500" />
-        ) : (
-          getStatusIcon(status.status)
-        )}
-        {isStopping ? "Stopping..." : status.status}
-      </span>
-    </p>
-    {status.status !== "stopped" && (
-      <>
-        <p>Model: {status.model}</p>
-        <p>
-          Layers: {status.from_layer} - {status.to_layer}
-        </p>
-        <p>Peers: {status.peers}</p>
-        <p>Sessions: {status.sessions}</p>
-        <p>
-          Balance:{" "}
-          {status.wallet.balance
-            ? (status.wallet.balance! / 100000000).toFixed(5)
-            : "..."}
-          {" "}APT
-        </p>
-        <p>
-          Topup:{" "}
-          {status.wallet.topup_balance
-            ? (status.wallet.topup_balance / 100000000).toFixed(5)
-            : "..."}
-          {" "}APT
-        </p>
-        <p>Spending: {status.wallet.spending}</p>
-        <p>Earning: {status.wallet.earning}</p>
-        <p className="flex items-center gap-2">
-          <span>Wallet:</span>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className="cursor-pointer flex items-center gap-1"
-                  onClick={() => copyToClipboard(status.wallet.address!)}
-                >
-                  {shortenAddress(status.wallet.address)}
-                  <CopyIcon className="w-3 h-3" />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{status.wallet.address}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </p>
-      </>
-    )}
-  </>)
+  return (
+    <>
+      {status.status !== "stopped" && appMode === "local" && (
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => handleStop(status.model)}
+          disabled={isStopping}
+        >
+          {isStopping ? (
+            <ReloadIcon className="w-4 h-4 animate-spin mr-2" />
+          ) : null}
+          Stop
+        </Button>
+      )}
+      <p className="flex items-center gap-2">
+        <span>Status:</span>
+        <span
+          className={`flex items-center gap-1 font-semibold ${getStatusColor(status.status)}`}
+        >
+          {isStopping ? (
+            <ReloadIcon className="w-4 h-4 animate-spin text-yellow-500" />
+          ) : (
+            getStatusIcon(status.status)
+          )}
+          {isStopping ? "Stopping..." : status.status}
+        </span>
+      </p>
+      {status.status !== "stopped" && (
+        <>
+          <p>Model: {status.model}</p>
+          <p>
+            Layers: {status.from_layer} - {status.to_layer}
+          </p>
+          <p>Peers: {status.peers.join(", ")}</p>
+          <p>Sessions: {status.sessions}</p>
+          <p>
+            Balance:{" "}
+            {status.wallet.balance
+              ? (status.wallet.balance! / 100000000).toFixed(5)
+              : "..."}{" "}
+            APT
+          </p>
+          <p>
+            Topup:{" "}
+            {status.wallet.topup_balance
+              ? (status.wallet.topup_balance / 100000000).toFixed(5)
+              : "..."}{" "}
+            APT
+          </p>
+          <p>Spending: {status.wallet.spending}</p>
+          <p>Earning: {status.wallet.earning}</p>
+          <p className="flex items-center gap-2">
+            <span>Wallet:</span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="cursor-pointer flex items-center gap-1"
+                    onClick={() => copyToClipboard(status.wallet.address!)}
+                  >
+                    {shortenAddress(status.wallet.address)}
+                    <CopyIcon className="w-3 h-3" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{status.wallet.address}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </p>
+        </>
+      )}
+    </>
+  );
 }
