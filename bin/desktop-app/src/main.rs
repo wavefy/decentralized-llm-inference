@@ -21,7 +21,7 @@ struct Args {
     stun_server: String,
 
     /// registry server
-    #[arg(env, long, default_value = "ws://127.0.0.1:3000/ws")]
+    #[arg(env, long, default_value = "wss://registry.llm.wavefy.network/ws")]
     registry_server: String,
 
     /// node id

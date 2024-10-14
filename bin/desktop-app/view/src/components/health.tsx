@@ -199,8 +199,8 @@ const SwarmHealthTables = ({
                         </TableCell>
                         <TableCell>{node.info.stats.token_out_tps}</TableCell>
                         <TableCell>{node.info.stats.token_out_sum}</TableCell>
-                        <TableCell>{node.info.stats.network_out_bytes}</TableCell>
-                        <TableCell>{node.info.stats.network_in_bytes}</TableCell>
+                        <TableCell>{formatBytes(node.info.stats.network_out_bytes)} ({formatBits(node.info.stats.network_out_bps)})</TableCell>
+                        <TableCell>{formatBytes(node.info.stats.network_in_bytes)} ({formatBits(node.info.stats.network_in_bps)})</TableCell>
                       </TableRow>
                     ))
                   ) : (
@@ -218,6 +218,22 @@ const SwarmHealthTables = ({
       })}
     </>
   );
+};
+
+const formatBytes = (bytes: number) => {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+const formatBits = (bytes: number) => {
+  if (bytes === 0) return '0 bps';
+  const k = 1024;
+  const sizes = ['bps', 'kbps', 'mbps', 'gbps', 'tbps'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
 export default Health;
