@@ -156,40 +156,36 @@ export default function ChatTopbar({
               <SelectContent>
                 {status.models.map((model) => (
                   <SelectItem key={model.model} value={model.model}>
-                    {model.model}
+                    <div className="flex items-center gap-2">
+                      <span>{model.model}</span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <span className="cursor-help">
+                              {model.status === 'ready' ? (
+                                <CheckCircledIcon className="w-4 h-4 text-green-500" />
+                              ) : (
+                                <DotFilledIcon className="w-4 h-4 text-yellow-500 animate-pulse" />
+                              )}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            sideOffset={4}
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-2 rounded-sm text-xs"
+                          >
+                            <p className="font-bold">{model.model}</p>
+                            <p className="text-gray-500">
+                              {model.status === 'ready' ? 'Ready' : 'Incomplete...'}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           )}
-          
-          {/* Model Status Indicators */}
-          <div className="flex items-center gap-2">
-            {status && status.models && status.models.map((model) => (
-              <TooltipProvider key={model.model}>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <span className="cursor-help">
-                      {model.status === 'ready' ? (
-                        <CheckCircledIcon className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <DotFilledIcon className="w-4 h-4 text-yellow-500 animate-pulse" />
-                      )}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    sideOffset={4}
-                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-2 rounded-sm text-xs"
-                  >
-                    <p className="font-bold">{model.model}</p>
-                    <p className="text-gray-500">
-                      {model.status === 'ready' ? 'Ready' : 'Incomplete...'}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ))}
-          </div>
         </div>
 
         {/* Right side */}
@@ -204,7 +200,7 @@ export default function ChatTopbar({
                 </TooltipTrigger>
                 <TooltipContent
                   sideOffset={4}
-                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-sm text-xs"
+                  className="z-60 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-sm text-xs"
                 >
                   <p className="text-gray-500">
                     Token limit exceeded. Truncating middle messages.
