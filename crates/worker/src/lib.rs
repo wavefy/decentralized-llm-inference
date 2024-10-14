@@ -15,7 +15,6 @@ use p2p_network::addr::NodeId;
 use protocol::worker::event::{RpcReq, RpcRes};
 use rpc::create_rpc;
 use spin::RwLock;
-use tokio::sync::mpsc::{Receiver, Sender};
 use usage_service::WorkerUsageService;
 pub use virtual_model_layers::*;
 

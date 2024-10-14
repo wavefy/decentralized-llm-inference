@@ -29,6 +29,6 @@ impl ProtobufStream {
     }
 
     pub async fn shutdown(&mut self) {
-        self.stream.close(None).await;
+        let _ = self.stream.close(None).await;
     }
 }

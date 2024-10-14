@@ -120,7 +120,9 @@ impl<LW: ModelLayersWorker<(Tensor, u32)> + Send + Sync + 'static, const MODEL_L
             if let Some(layers) = route.local {
                 log::info!("[ModelService] start session {} with local layers {layers:?}", req.session);
                 // TODO: Handle Chat Config properly
-                self.layers.start(Session(req.session), ChatCfg::default()).await;
+                if let Err(_e) = self.layers.start(Session(req.session), ChatCfg::default()).await {
+                    return StartRes { success: false, metadata: vec![] };
+                }
             }
 
             let res = if let Some((dest, layers, _, _)) = &route.remote {

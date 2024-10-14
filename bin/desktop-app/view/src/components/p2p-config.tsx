@@ -118,7 +118,7 @@ const P2pConfigWidget = ({ status }: P2pConfigProps) => {
     try {
       const maxLayers = Math.floor(
         (maxMemory / MODELS[selectedModel].memory) *
-          MODELS[selectedModel].layers
+        MODELS[selectedModel].layers
       );
       const suggestedLayers = await suggestP2pLayers(
         controlBasePath,
@@ -138,7 +138,7 @@ const P2pConfigWidget = ({ status }: P2pConfigProps) => {
       } else if (suggestedLayers.min_layers !== undefined) {
         const requiredMemory = Math.ceil(
           (MODELS[selectedModel].memory * suggestedLayers.min_layers) /
-            MODELS[selectedModel].layers
+          MODELS[selectedModel].layers
         );
         setWarning(
           `Need at least ${requiredMemory}GB of memory for ${suggestedLayers.min_layers} layers.`
@@ -352,7 +352,7 @@ const P2pConfigWidget = ({ status }: P2pConfigProps) => {
                         type="number"
                         value={endLayer}
                         onChange={(e) => setEndLayer(Number(e.target.value))}
-                        min={startLayer + 1}
+                        min={startLayer}
                         max={MODELS[selectedModel].layers}
                       />
                     </div>
@@ -365,7 +365,7 @@ const P2pConfigWidget = ({ status }: P2pConfigProps) => {
                 onClick={handleStart}
                 disabled={
                   !selectedModel ||
-                  startLayer >= endLayer ||
+                  startLayer > endLayer ||
                   loading ||
                   !privateKey ||
                   !accountBalance ||

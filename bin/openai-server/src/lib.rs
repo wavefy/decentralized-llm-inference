@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    sync::{Arc},
-};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use api_control::{p2p_start, p2p_status, p2p_stop, p2p_suggest_layers, ModelState, P2pState};
 use clap::{Parser, Subcommand};

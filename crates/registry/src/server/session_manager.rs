@@ -1,5 +1,6 @@
 use std::{
-    collections::{HashMap, VecDeque}, hash::Hash, ops::Range
+    collections::{HashMap, VecDeque},
+    ops::Range,
 };
 
 use p2p_network::addr::NodeId;

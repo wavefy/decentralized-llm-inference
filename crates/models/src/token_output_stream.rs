@@ -19,6 +19,7 @@ impl TokenOutputStream {
         }
     }
 
+    #[allow(unused)]
     pub fn into_inner(self) -> tokenizers::Tokenizer {
         self.tokenizer
     }
@@ -66,10 +67,12 @@ impl TokenOutputStream {
         }
     }
 
+    #[allow(unused)]
     pub fn decode_all(&self) -> Result<String> {
         self.decode(&self.tokens)
     }
 
+    #[allow(unused)]
     pub fn get_token(&self, token_s: &str) -> Option<u32> {
         self.tokenizer.get_vocab(true).get(token_s).copied()
     }
@@ -78,6 +81,7 @@ impl TokenOutputStream {
         &self.tokenizer
     }
 
+    #[allow(unused)]
     pub fn clear(&mut self) {
         self.tokens.clear();
         self.prev_index = 0;

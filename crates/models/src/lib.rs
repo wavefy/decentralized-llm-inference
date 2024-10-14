@@ -7,7 +7,6 @@ pub mod fake;
 pub mod llama;
 mod logits_processor;
 pub mod phi3;
-mod quantized_var_builder;
 pub mod remote;
 mod token_output_stream;
 mod utils;

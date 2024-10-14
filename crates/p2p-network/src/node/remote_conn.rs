@@ -136,9 +136,7 @@ impl RemoteConn {
                         str0m::Event::IceConnectionStateChange(state) => {
                             log::info!("[RemoteConn {:?}] state changed to {state:?}", self.remote);
                             if let str0m::IceConnectionState::Disconnected = state {
-                                if self.channel.take().is_some() {
-                                    self.queue.push_back(RemoteConnOut::Disconnected);
-                                }
+                                self.queue.push_back(RemoteConnOut::Disconnected);
                             }
                         }
                         str0m::Event::ChannelOpen(channel, name) => {
@@ -315,19 +313,10 @@ impl<const CHUNK_SIZE: usize, const AIR_LIMIT: usize> ConnectionBuffer<CHUNK_SIZ
             assert_eq!(out.in_air_size(), first_size);
             self.in_air_size += first_size;
             match &out {
-                ConnectionChunk::Chunk {
-                    frame_id,
-                    chunk_id: chunk_id,
-                    chunk_count: chunk_count,
-                    ..
-                } => {
+                ConnectionChunk::Chunk { frame_id, chunk_id, chunk_count, .. } => {
                     log::debug!("[ConnectionBuffer] sending frame {frame_id} chunk {chunk_id}/{chunk_count} size {first_size}");
                 }
-                ConnectionChunk::ChunkAck {
-                    frame_id,
-                    chunk_id: chunk_id,
-                    chunk_count: chunk_count,
-                } => {
+                ConnectionChunk::ChunkAck { frame_id, chunk_id, chunk_count } => {
                     log::debug!("[ConnectionBuffer] sending ack fro frame {frame_id} chunk {chunk_id}/{chunk_count}");
                 }
             }
@@ -468,13 +457,7 @@ mod tests {
         while let Some(sent) = buffer.pop_send() {
             sent_count += 1;
             let chunk: ConnectionChunk = bincode::deserialize(&sent).unwrap();
-            if let ConnectionChunk::Chunk {
-                frame_id,
-                chunk_id: chunk_id,
-                chunk_count: chunk_count,
-                ..
-            } = chunk
-            {
+            if let ConnectionChunk::Chunk { frame_id, chunk_id, chunk_count, .. } = chunk {
                 // Simulate receiving an ACK for all but the last chunk
                 if chunk_id < chunk_count - 1 {
                     let ack = ConnectionChunk::ChunkAck {
