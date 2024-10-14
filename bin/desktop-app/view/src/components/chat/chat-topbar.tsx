@@ -183,7 +183,7 @@ export default function ChatTopbar({
                   >
                     <p className="font-bold">{model.model}</p>
                     <p className="text-gray-500">
-                      {model.status === 'ready' ? 'Ready' : 'Loading...'}
+                      {model.status === 'ready' ? 'Ready' : 'Incomplete...'}
                     </p>
                   </TooltipContent>
                 </Tooltip>

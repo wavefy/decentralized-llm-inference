@@ -12,7 +12,7 @@ export const Route = createRootRoute({
 });
 
 const RootComponent = () => {
-  const hideNavRoutes = ["/health"];
+  const hideNavRoutes = ["/hidden"];
 
   const matchRoute = useMatchRoute();
 
@@ -39,6 +39,12 @@ const RootComponent = () => {
               >
                 Dashboard
               </Link>
+              <Link
+                to="/health"
+                className="hover:text-gray-300 transition-colors duration-200 [&.active]:text-blue-400 [&.active]:font-semibold"
+              >
+                Health
+                </Link>
             </div>
           </div>
         </nav>
