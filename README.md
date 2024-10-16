@@ -54,4 +54,3 @@ This visualization demonstrates how even a relatively complex model, like one wi
 - Phi3
 - unsloth/Llama-3.2-1B-Instruct
 - unsloth/Llama-3.2-3B-Instruct
-- unsloth/Llama-3.2-11B-Instruct

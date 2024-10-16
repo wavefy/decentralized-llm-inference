@@ -47,10 +47,6 @@ const MODELS: any = {
     layers: 28,
     memory: 8,
   },
-  "llama32-vision-11b": {
-    layers: 40,
-    memory: 25,
-  },
   phi3: {
     layers: 32,
     memory: 4,

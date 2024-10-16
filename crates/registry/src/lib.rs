@@ -28,7 +28,7 @@ pub struct ModelInfo {
     pub memory: usize,
 }
 
-pub const SUPPORTED_MODELS: [ModelInfo; 4] = [
+pub const SUPPORTED_MODELS: [ModelInfo; 3] = [
     ModelInfo {
         id: "llama32-1b",
         layers: 16,
@@ -38,11 +38,6 @@ pub const SUPPORTED_MODELS: [ModelInfo; 4] = [
         id: "llama32-3b",
         layers: 28,
         memory: 8,
-    },
-    ModelInfo {
-        id: "llama32-vision-11b",
-        layers: 40,
-        memory: 25,
     },
     ModelInfo {
         id: "phi3",

@@ -46,6 +46,12 @@ pub struct LlamaConfig {
     pub tie_word_embeddings: Option<bool>,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct LLamaVisionConfig {
+    pub text_config: LlamaConfig,
+}
+
+
 impl LlamaConfig {
     pub fn num_key_value_heads(&self) -> usize {
         self.num_key_value_heads.unwrap_or(self.num_attention_heads)
