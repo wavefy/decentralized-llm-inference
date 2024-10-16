@@ -75,7 +75,7 @@ pub async fn run_model_worker(
         }
         "llama32-vision-11b" => {
             let resource = llama::ModelResource {
-                repo: "unsloth/Llama-3.2-1B-Instruct".to_string(),
+                repo: "unsloth/Llama-3.2-11B-Vision-Instruct".to_string(),
                 model: "model.safetensors.index.json".to_string(),
                 config: "config.json".to_string(),
                 tokenizer: "tokenizer.json".to_string(),
