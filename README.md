@@ -54,3 +54,37 @@ This visualization demonstrates how even a relatively complex model, like one wi
 - Phi3
 - unsloth/Llama-3.2-1B-Instruct
 - unsloth/Llama-3.2-3B-Instruct
+
+
+## Usage
+
+### As a LLM User
+
+- [Wavefy LLM Demo](https://llm.wavefy.network)
+- A LLM User in this demo is simply a Web2 user, who is using the service from a third-party that is utilizing the network, so in the user side, there is no wallet involved. 
+
+### As a Contributor
+
+First, add a `.env` file in `bin/desktop-app/view/.env`:
+```
+VITE_VLLM_URL="http://localhost:18888"
+VITE_VLLM_CONTROLS_URL="http://localhost:18888"
+VITE_REGISTRY_URL="https://registry.llm.wavefy.network"
+VITE_VLLM_CONTRACT="0xf4289dca4fe79c4e61fe1255d7f47556c38f512b5cf9ddf727f0e44a5c6a6b00"
+VITE_NODIT_GQL_API="https://aptos-testnet.nodit.io/c4SvS8ZuP7dI9kHC2dRBpFzSKjmFS2eb/v1/graphql"
+```
+
+Then you will need to build the app yourself by:
+- For baremetal (CPU - RAM)
+```rust
+cargo build --release -p desktop-app --features metal
+```
+- For CUDA
+```
+cargo build --release -p desktop-app --features cuda
+```
+
+Then you can follow the [Demo video](https://youtu.be/Mi5JrVATHGU) to use the app as a contributor.
+
+
+
